@@ -129,7 +129,7 @@ const QUICK_LEGAL_FAQS: QuickLegalFaq[] = [
     category: 'Remuneração & Adicionais',
     lawRef: 'CLT · Art. 73, Art. 192 e Art. 193',
     lawCode: 'CLT-5452',
-    searchKeyword: 'Art. 192',
+    searchKeyword: 'Art. 73, Art. 192, Art. 193, Art. 457',
     practicalAnswer:
       'Insalubridade (Art. 192): 10% (grau mínimo), 20% (médio) ou 40% (máximo) sobre o salário-mínimo vigente. Periculosidade (Art. 193, § 1º): 30% sobre o salário-base contratual (sem acréscimos de gratificações ou prêmios). Adicional Noturno urbano (Art. 73): mínimo de 20% sobre a hora diurna para trabalho executado entre 22h e 5h.',
   },
@@ -163,6 +163,10 @@ export const LegalConsultationModule: React.FC = () => {
 
   const matchingArticles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const tokens = q
+      .split(/\s+ou\s+|,|;/i)
+      .map((t) => t.trim())
+      .filter(Boolean);
     const results: Array<{
       lawCode: string;
       lawNumber: string;
@@ -173,13 +177,16 @@ export const LegalConsultationModule: React.FC = () => {
 
     for (const law of activeLaws) {
       for (const art of law.key_articles) {
-        if (
-          !q ||
-          art.article.toLowerCase().includes(q) ||
-          art.content.toLowerCase().includes(q) ||
-          law.title.toLowerCase().includes(q) ||
-          law.tags.some((t) => t.toLowerCase().includes(q))
-        ) {
+        const matchesQuery =
+          tokens.length === 0 ||
+          tokens.some(
+            (tok) =>
+              art.article.toLowerCase().includes(tok) ||
+              art.content.toLowerCase().includes(tok) ||
+              law.title.toLowerCase().includes(tok) ||
+              law.tags.some((t) => t.toLowerCase().includes(tok))
+          );
+        if (matchesQuery) {
           results.push({
             lawCode: law.code,
             lawNumber: law.law_number,

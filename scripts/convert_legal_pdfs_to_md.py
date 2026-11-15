@@ -160,7 +160,7 @@ def clean_extracted_text(raw_text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 
-def extract_key_articles(markdown_body: str, max_articles: int = 80) -> list[dict[str, str]]:
+def extract_key_articles(markdown_body: str, max_articles: int = 120) -> list[dict[str, str]]:
     """Extrai artigos estruturados (Art. X) para busca instantânea na interface."""
     pattern = re.compile(
         r"###\s+(Art\.\s*\d+[º°o\-A-Za-z]*\.?)\s*(.*?)(?=\n###\s+Art\.|\n#\s+|\n##\s+|\Z)",
@@ -170,14 +170,15 @@ def extract_key_articles(markdown_body: str, max_articles: int = 80) -> list[dic
     articles: list[dict[str, str]] = []
     seen_numbers: set[str] = set()
 
-    # Priorizar artigos clássicos da CLT + todos das leis menores
-    priority_prefixes = (
-        "Art. 1", "Art. 2", "Art. 3", "Art. 7", "Art. 29", "Art. 41", "Art. 58", "Art. 59",
-        "Art. 61", "Art. 62", "Art. 66", "Art. 71", "Art. 73", "Art. 75", "Art. 129", "Art. 130",
-        "Art. 134", "Art. 135", "Art. 142", "Art. 143", "Art. 189", "Art. 192", "Art. 193",
-        "Art. 392", "Art. 442", "Art. 443", "Art. 457", "Art. 458", "Art. 461", "Art. 462",
-        "Art. 468", "Art. 473", "Art. 477", "Art. 482", "Art. 483", "Art. 484", "Art. 487",
-    )
+    # Artigos essenciais da CLT, Reforma Trabalhista e RIR/2018 (exact number match)
+    priority_numbers = {
+        "1", "2", "3", "7", "29", "41", "58", "58-A", "59", "59-A", "59-B",
+        "61", "62", "66", "71", "73", "75", "75-A", "75-B", "75-C",
+        "129", "130", "130-A", "134", "135", "137", "142", "143", "145",
+        "189", "190", "191", "192", "193", "194", "195",
+        "392", "442", "442-B", "443", "457", "458", "461", "462", "468",
+        "473", "477", "482", "483", "484", "484-A", "487",
+    }
 
     prioritised: list[tuple[str, str]] = []
     others: list[tuple[str, str]] = []
@@ -188,7 +189,9 @@ def extract_key_articles(markdown_body: str, max_articles: int = 80) -> list[dic
             continue
         if "(Revogado" in clean_text[:60] or "(revogado" in clean_text[:60]:
             continue
-        if any(clean_num.startswith(p) for p in priority_prefixes):
+        num_match = re.search(r"Art\.\s*(\d+(?:-[A-Za-z]+)?)", clean_num)
+        num_token = num_match.group(1) if num_match else ""
+        if num_token in priority_numbers:
             prioritised.append((clean_num, clean_text))
         else:
             others.append((clean_num, clean_text))
@@ -268,7 +271,7 @@ def convert_pdf_file(pdf_path: Path) -> dict[str, Any]:
     md_out_path = MARKDOWN_OUT_DIR / md_filename
     md_out_path.write_text(full_markdown, encoding="utf-8")
 
-    key_articles = extract_key_articles(cleaned_md_body, max_articles=90)
+    key_articles = extract_key_articles(cleaned_md_body, max_articles=120)
 
     return {
         "code": meta["code"],
