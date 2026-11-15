@@ -1,6 +1,6 @@
 {
-  "name": "HireGrid AI - People Analytics & R&S Engine",
-  "description": "Motor oficial de Inteligência Artificial do HireGrid para People Analytics B2B, gestão de recrutamento multi-tenant e onboarding sobre Supabase/PostgreSQL.",
+  "name": "CCB RH - People Analytics & Gestão de RH",
+  "description": "Plataforma corporativa da CCB Soluções em RH para Gestão de Pessoas, Recrutamento & Seleção, Departamento Pessoal e Folha de Pagamento.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

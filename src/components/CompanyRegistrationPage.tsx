@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   ArrowLeft,
   Briefcase,
@@ -121,7 +121,7 @@ const INITIAL_VACANCY: VacancyEntry = {
 export const CompanyRegistrationPage: React.FC<CompanyRegistrationPageProps> = ({
   onBackToLanding,
 }) => {
-  const { registerClientCompany } = useHireGrid();
+  const { submitPublicCompanyRegistration } = useCcb();
   const [form, setForm] = useState<CompanyFormData>(INITIAL_COMPANY);
   const [vagas, setVagas] = useState<VacancyEntry[]>([{ ...INITIAL_VACANCY }]);
   const [submitting, setSubmitting] = useState(false);
@@ -218,43 +218,39 @@ export const CompanyRegistrationPage: React.FC<CompanyRegistrationPageProps> = (
 
     setSubmitting(true);
     try {
-      const response = await fetch('/api/company-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          empresa: {
-            ...form,
-            logoPreview: form.logoPreview ? '[anexado]' : '',
-          },
-          vagas,
-        }),
+      await submitPublicCompanyRegistration({
+        company: {
+          name: form.nome,
+          cnpj: form.cnpj,
+          email: form.email,
+          telefone: form.telefone,
+          area_atuacao: form.area_atuacao,
+          porte: form.porte,
+          descricao: form.descricao,
+          endereco: form.endereco,
+          numero: form.numero,
+          complemento: form.complemento,
+          bairro: form.bairro,
+          cep: form.cep,
+          cidade: form.cidade,
+          estado: form.estado,
+          tem_filiais: form.tem_filiais,
+          responsavel_nome: form.responsavel_nome,
+          responsavel_cargo: form.responsavel_cargo,
+          beneficios: form.beneficios,
+          status: 'pending_review',
+        },
+        branches: form.tem_filiais ? form.filiais : [],
+        vacancies: vagas,
       });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setError(data.error || 'Erro ao enviar o cadastro. Tente novamente.');
-      } else {
-        registerClientCompany({
-          company: {
-            name: form.nome,
-            cnpj: form.cnpj,
-            email: form.email,
-            telefone: form.telefone,
-            area_atuacao: form.area_atuacao,
-            porte: form.porte,
-            cidade: form.cidade,
-            estado: form.estado,
-            responsavel_nome: form.responsavel_nome,
-            responsavel_cargo: form.responsavel_cargo,
-            beneficios: form.beneficios,
-            status: 'pending_review',
-          },
-          vacancies: vagas,
-        });
-        setSubmitted(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch {
-      setError('Erro de conexão ao enviar o cadastro. Tente novamente.');
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Erro de conexão ao enviar o cadastro. Tente novamente.'
+      );
     } finally {
       setSubmitting(false);
     }

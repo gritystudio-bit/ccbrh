@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
+import { Company, CompanyBranch, ContactLead } from '../types/database';
 import {
   Building2,
   CheckCircle2,
@@ -13,6 +14,10 @@ import {
   Search,
   MapPin,
   ShieldCheck,
+  Pencil,
+  Trash2,
+  Mail,
+  Loader2,
 } from 'lucide-react';
 
 interface CompaniesModuleProps {
@@ -27,16 +32,29 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
     currentTenantId,
     setCurrentTenantId,
     registerClientCompany,
+    updateCompany,
     approveCompanyStatus,
+    deleteCompany,
     addCompanyBranch,
-  } = useHireGrid();
+    updateCompanyBranch,
+    deleteCompanyBranch,
+    updateContactLeadStatus,
+    deleteContactLead,
+  } = useCcb();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'pending_review'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [actionBanner, setActionBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(
+    null
+  );
 
-  // Modal de nova filial para empresa existente
+  // Modal de nova filial / edição de filial
   const [branchModalCompanyId, setBranchModalCompanyId] = useState<string | null>(null);
+  const [editingBranch, setEditingBranch] = useState<CompanyBranch | null>(null);
+  const [savingBranch, setSavingBranch] = useState(false);
   const [branchLabel, setBranchLabel] = useState('');
   const [branchCnpj, setBranchCnpj] = useState('');
   const [branchEndereco, setBranchEndereco] = useState('');
@@ -110,36 +128,8 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
   const activeCount = companiesWithStats.filter((c) => c.status === 'active').length;
   const totalConsolidatedPayroll = companiesWithStats.reduce((s, c) => s + c.payroll, 0);
 
-  const handleCreateCompany = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    const created = registerClientCompany({
-      company: {
-        name: name.trim(),
-        cnpj: cnpj.trim() || `${Date.now()}`.slice(0, 14),
-        cnpj_root: cnpjRoot.trim() || undefined,
-        area_atuacao: areaAtuacao.trim() || undefined,
-        email: email.trim() || undefined,
-        telefone: telefone.trim() || undefined,
-        cidade: cidade.trim() || undefined,
-        estado: estado.trim() || undefined,
-        responsavel_nome: responsavelNome.trim() || undefined,
-        responsavel_cargo: responsavelCargo.trim() || undefined,
-        status: 'active',
-      },
-      vacancies: initialJobTitle.trim()
-        ? [
-            {
-              cargo: initialJobTitle.trim(),
-              area: initialJobArea.trim() || areaAtuacao.trim() || 'Operações',
-              salario: initialJobSalary.trim() || '4000',
-            },
-          ]
-        : [],
-    });
-
-    setCurrentTenantId(created.id);
+  const resetCompanyForm = () => {
+    setEditingCompany(null);
     setName('');
     setCnpj('');
     setCnpjRoot('');
@@ -153,11 +143,132 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
     setInitialJobTitle('');
     setInitialJobArea('');
     setInitialJobSalary('');
-    setShowAddModal(false);
+  };
+
+  const openEditCompanyModal = (comp: Company) => {
+    setEditingCompany(comp);
+    setName(comp.name);
+    setCnpj(comp.cnpj || '');
+    setCnpjRoot(comp.cnpj_root || '');
+    setAreaAtuacao(comp.area_atuacao || '');
+    setEmail(comp.email || '');
+    setTelefone(comp.telefone || '');
+    setCidade(comp.cidade || '');
+    setEstado(comp.estado || '');
+    setResponsavelNome(comp.responsavel_nome || '');
+    setResponsavelCargo(comp.responsavel_cargo || '');
+    setInitialJobTitle('');
+    setInitialJobArea('');
+    setInitialJobSalary('');
+    setShowAddModal(true);
+  };
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSavingCompany(true);
+    setActionBanner(null);
+
+    try {
+      if (editingCompany) {
+        await updateCompany(editingCompany.id, {
+          name: name.trim(),
+          cnpj: cnpj.trim() || editingCompany.cnpj,
+          cnpj_root: cnpjRoot.trim() || undefined,
+          area_atuacao: areaAtuacao.trim() || undefined,
+          email: email.trim() || undefined,
+          telefone: telefone.trim() || undefined,
+          cidade: cidade.trim() || undefined,
+          estado: estado.trim() || undefined,
+          responsavel_nome: responsavelNome.trim() || undefined,
+          responsavel_cargo: responsavelCargo.trim() || undefined,
+        });
+        setActionBanner({
+          type: 'success',
+          text: `Empresa "${name.trim()}" atualizada com sucesso.`,
+        });
+      } else {
+        const created = await registerClientCompany({
+          company: {
+            name: name.trim(),
+            cnpj: cnpj.trim() || `${Date.now()}`.slice(0, 14),
+            cnpj_root: cnpjRoot.trim() || undefined,
+            area_atuacao: areaAtuacao.trim() || undefined,
+            email: email.trim() || undefined,
+            telefone: telefone.trim() || undefined,
+            cidade: cidade.trim() || undefined,
+            estado: estado.trim() || undefined,
+            responsavel_nome: responsavelNome.trim() || undefined,
+            responsavel_cargo: responsavelCargo.trim() || undefined,
+            status: 'active',
+          },
+          vacancies: initialJobTitle.trim()
+            ? [
+                {
+                  cargo: initialJobTitle.trim(),
+                  area: initialJobArea.trim() || areaAtuacao.trim() || 'Operações',
+                  salario: initialJobSalary.trim() || '4000',
+                },
+              ]
+            : [],
+        });
+
+        setCurrentTenantId(created.id);
+        setActionBanner({
+          type: 'success',
+          text: `Empresa "${created.name}" cadastrada com sucesso.`,
+        });
+      }
+      resetCompanyForm();
+      setShowAddModal(false);
+    } catch (err) {
+      setActionBanner({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Erro ao salvar empresa.',
+      });
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
+  const handleDeleteCompany = async (comp: Company) => {
+    if (
+      !window.confirm(
+        `ATENÇÃO: Deseja excluir permanentemente a empresa "${comp.name}" e todos os seus cargos, colaboradores, vagas e candidatos?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteCompany(comp.id);
+      setActionBanner({
+        type: 'success',
+        text: `Empresa "${comp.name}" excluída permanentemente.`,
+      });
+    } catch (err) {
+      setActionBanner({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Erro ao excluir empresa.',
+      });
+    }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {actionBanner && (
+        <div
+          className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-semibold ${
+            actionBanner.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <span>{actionBanner.text}</span>
+          <button onClick={() => setActionBanner(null)} className="opacity-70 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -175,7 +286,10 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
 
         <button
           type="button"
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            resetCompanyForm();
+            setShowAddModal(true);
+          }}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#082175] text-white text-xs sm:text-sm font-semibold hover:bg-[#0a2a8a] transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4 text-[#f5a90e]" />
@@ -359,6 +473,7 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                         <button
                           type="button"
                           onClick={() => {
+                            setEditingBranch(null);
                             setBranchModalCompanyId(comp.id);
                             setBranchLabel('');
                             setBranchCnpj(comp.cnpj_root ? `${comp.cnpj_root}` : '');
@@ -372,7 +487,7 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                         </button>
                       </div>
                       {compBranches.length > 0 ? (
-                        <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                           {compBranches.map((b) => (
                             <div
                               key={b.id}
@@ -381,9 +496,45 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                               <span className="font-medium text-slate-700 truncate">
                                 {b.label}
                               </span>
-                              <span className="font-mono text-slate-500 shrink-0">
-                                {formatCnpj(b.cnpj)}
-                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-mono text-slate-500">
+                                  {formatCnpj(b.cnpj || '')}
+                                </span>
+                                <button
+                                  type="button"
+                                  title="Editar filial"
+                                  onClick={() => {
+                                    setEditingBranch(b);
+                                    setBranchModalCompanyId(comp.id);
+                                    setBranchLabel(b.label);
+                                    setBranchCnpj(b.cnpj || '');
+                                    setBranchEndereco(b.endereco || '');
+                                    setBranchCidade(b.cidade || '');
+                                    setBranchEstado(b.estado || 'SP');
+                                  }}
+                                  className="text-slate-400 hover:text-[#082175]"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Excluir filial"
+                                  onClick={async () => {
+                                    if (!window.confirm(`Excluir filial "${b.label}"?`)) return;
+                                    try {
+                                      await deleteCompanyBranch(b.id);
+                                    } catch (err) {
+                                      setActionBanner({
+                                        type: 'error',
+                                        text: err instanceof Error ? err.message : 'Erro ao excluir filial.',
+                                      });
+                                    }
+                                  }}
+                                  className="text-slate-400 hover:text-red-600"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -436,7 +587,20 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                 {isPending && (
                   <button
                     type="button"
-                    onClick={() => approveCompanyStatus(comp.id, 'active')}
+                    onClick={async () => {
+                      try {
+                        await approveCompanyStatus(comp.id, 'active');
+                        setActionBanner({
+                          type: 'success',
+                          text: `Empresa "${comp.name}" ativada com sucesso.`,
+                        });
+                      } catch (err) {
+                        setActionBanner({
+                          type: 'error',
+                          text: err instanceof Error ? err.message : 'Erro ao ativar empresa.',
+                        });
+                      }
+                    }}
                     className="flex-1 py-2 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
@@ -455,6 +619,22 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                   <span>{isSelected ? 'Abrir Resumo Gerencial' : 'Gerenciar esta Empresa'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => openEditCompanyModal(comp)}
+                  title="Editar empresa"
+                  className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-[#082175] hover:bg-slate-50 cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCompany(comp)}
+                  title="Excluir empresa"
+                  className="p-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           );
@@ -471,22 +651,90 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
         </span>
       </div>
 
-      {/* Modal: Cadastrar Nova Empresa Cliente */}
+      {/* Leads de Contato Recebidos */}
+      {database.contactLeads.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[#082175] flex items-center gap-2">
+              <Mail className="w-4 h-4 text-[#9F8548]" />
+              <span>Solicitações de Contato (Landing Page) ({database.contactLeads.length})</span>
+            </h2>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {database.contactLeads.map((lead) => (
+              <div
+                key={lead.id}
+                className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+              >
+                <div className="space-y-0.5 min-w-[220px]">
+                  <p className="font-bold text-[#082175]">
+                    {lead.name}{' '}
+                    {lead.company && (
+                      <span className="font-normal text-slate-500">· {lead.company}</span>
+                    )}
+                  </p>
+                  <p className="text-slate-500">
+                    {lead.email} {lead.phone ? `· ${lead.phone}` : ''}
+                  </p>
+                  <p className="text-slate-600">{lead.message}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    aria-label={`Status do lead ${lead.name}`}
+                    value={lead.status}
+                    onChange={async (e) => {
+                      await updateContactLeadStatus(
+                        lead.id,
+                        e.target.value as ContactLead['status']
+                      );
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-[#03416A]"
+                  >
+                    <option value="novo">Novo</option>
+                    <option value="em_atendimento">Em Atendimento</option>
+                    <option value="concluido">Concluído</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!window.confirm(`Excluir contato de ${lead.name}?`)) return;
+                      await deleteContactLead(lead.id);
+                    }}
+                    className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                    title="Excluir lead"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Cadastrar / Editar Empresa Cliente */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-bold text-[#082175]">
-                  Cadastrar Empresa Cliente na CCB
+                  {editingCompany
+                    ? 'Editar Empresa Cliente'
+                    : 'Cadastrar Empresa Cliente na CCB'}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Cria um novo ambiente isolado para gestão de pessoas, vagas e folha.
+                  {editingCompany
+                    ? 'Atualize os dados cadastrais da empresa.'
+                    : 'Cria um novo ambiente isolado para gestão de pessoas, vagas e folha.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetCompanyForm();
+                }}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -655,16 +903,27 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    resetCompanyForm();
+                  }}
                   className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#082175] text-white text-xs font-semibold hover:bg-[#0a2a8a] cursor-pointer"
+                  disabled={savingCompany}
+                  className="px-4 py-2 rounded-lg bg-[#082175] text-white text-xs font-semibold hover:bg-[#0a2a8a] cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
                 >
-                  Cadastrar e Gerenciar Empresa
+                  {savingCompany && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {savingCompany
+                      ? 'Salvando...'
+                      : editingCompany
+                      ? 'Salvar Alterações'
+                      : 'Cadastrar e Gerenciar Empresa'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -672,20 +931,25 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
         </div>
       )}
 
-      {/* Modal: Cadastrar Nova Filial para Empresa Existente */}
+      {/* Modal: Cadastrar / Editar Filial */}
       {branchModalCompanyId && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-[#082175]">Cadastrar Nova Unidade / Filial</h3>
+                <h3 className="text-base font-bold text-[#082175]">
+                  {editingBranch ? 'Editar Unidade / Filial' : 'Cadastrar Nova Unidade / Filial'}
+                </h3>
                 <p className="text-xs text-slate-500">
                   {database.companies.find((c) => c.id === branchModalCompanyId)?.name}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setBranchModalCompanyId(null)}
+                onClick={() => {
+                  setBranchModalCompanyId(null);
+                  setEditingBranch(null);
+                }}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -693,18 +957,47 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (!branchLabel.trim() || !branchCnpj.trim()) return;
-                addCompanyBranch(branchModalCompanyId, {
-                  label: branchLabel.trim(),
-                  cnpj: branchCnpj.trim(),
-                  endereco: branchEndereco.trim() || undefined,
-                  cidade: branchCidade.trim() || undefined,
-                  estado: branchEstado.trim() || undefined,
-                  is_headquarters: false,
-                });
-                setBranchModalCompanyId(null);
+                setSavingBranch(true);
+                try {
+                  if (editingBranch) {
+                    await updateCompanyBranch(editingBranch.id, {
+                      label: branchLabel.trim(),
+                      cnpj: branchCnpj.trim(),
+                      endereco: branchEndereco.trim() || undefined,
+                      cidade: branchCidade.trim() || undefined,
+                      estado: branchEstado.trim() || undefined,
+                    });
+                    setActionBanner({
+                      type: 'success',
+                      text: `Filial "${branchLabel.trim()}" atualizada.`,
+                    });
+                  } else {
+                    await addCompanyBranch(branchModalCompanyId, {
+                      label: branchLabel.trim(),
+                      cnpj: branchCnpj.trim(),
+                      endereco: branchEndereco.trim() || undefined,
+                      cidade: branchCidade.trim() || undefined,
+                      estado: branchEstado.trim() || undefined,
+                      is_headquarters: false,
+                    });
+                    setActionBanner({
+                      type: 'success',
+                      text: `Filial "${branchLabel.trim()}" adicionada.`,
+                    });
+                  }
+                  setBranchModalCompanyId(null);
+                  setEditingBranch(null);
+                } catch (err) {
+                  setActionBanner({
+                    type: 'error',
+                    text: err instanceof Error ? err.message : 'Erro ao salvar filial.',
+                  });
+                } finally {
+                  setSavingBranch(false);
+                }
               }}
               className="mt-4 space-y-3 text-xs"
             >
@@ -776,9 +1069,10 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#082175] text-white font-semibold cursor-pointer"
+                  disabled={savingBranch}
+                  className="px-4 py-2 rounded-lg bg-[#082175] text-white font-semibold cursor-pointer disabled:opacity-60"
                 >
-                  Salvar Filial
+                  {savingBranch ? 'Salvando...' : 'Salvar Filial'}
                 </button>
               </div>
             </form>

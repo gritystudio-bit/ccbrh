@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   FolderArchive,
   FileText,
@@ -9,15 +9,25 @@ import {
   Search,
   Check,
   ShieldCheck,
+  ExternalLink,
+  Trash2,
 } from 'lucide-react';
 
 export const DocumentRepositoryModule: React.FC = () => {
-  const { documents, employees, candidates, updateDocumentStatus } = useHireGrid();
+  const {
+    documents,
+    employees,
+    candidates,
+    updateDocumentStatus,
+    deleteDocument,
+    getDocumentSignedUrl,
+  } = useCcb();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterOwner, setFilterOwner] = useState<'all' | 'employees' | 'candidates'>('all');
+  const [docFeedback, setDocFeedback] = useState<string | null>(null);
 
   const totalDocs = documents.length;
   const approvedDocs = documents.filter((d) => d.status === 'approved').length;
@@ -49,6 +59,14 @@ export const DocumentRepositoryModule: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {docFeedback && (
+        <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-900 flex items-center justify-between">
+          <span>{docFeedback}</span>
+          <button onClick={() => setDocFeedback(null)} className="underline ml-4">
+            Fechar
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -296,7 +314,31 @@ export const DocumentRepositoryModule: React.FC = () => {
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => updateDocumentStatus(doc.id, 'approved')}
+                            onClick={async () => {
+                              const url = await getDocumentSignedUrl(doc.storage_path);
+                              if (url) {
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              } else {
+                                setDocFeedback(
+                                  `Arquivo de referência "${doc.storage_path}" ainda não possui binário no Storage.`
+                                );
+                              }
+                            }}
+                            title="Abrir arquivo no Storage"
+                            className="p-1.5 rounded border border-slate-200 text-[#03416A] hover:bg-slate-50"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updateDocumentStatus(doc.id, 'approved');
+                              } catch (err) {
+                                setDocFeedback(
+                                  err instanceof Error ? err.message : 'Erro ao aprovar documento.'
+                                );
+                              }
+                            }}
                             title="Aprovar documento"
                             className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
                               doc.status === 'approved'
@@ -308,7 +350,15 @@ export const DocumentRepositoryModule: React.FC = () => {
                             <span>Aprovar</span>
                           </button>
                           <button
-                            onClick={() => updateDocumentStatus(doc.id, 'rejected')}
+                            onClick={async () => {
+                              try {
+                                await updateDocumentStatus(doc.id, 'rejected');
+                              } catch (err) {
+                                setDocFeedback(
+                                  err instanceof Error ? err.message : 'Erro ao rejeitar documento.'
+                                );
+                              }
+                            }}
                             title="Rejeitar documento"
                             className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
                               doc.status === 'rejected'
@@ -318,6 +368,22 @@ export const DocumentRepositoryModule: React.FC = () => {
                           >
                             <XCircle className="w-3 h-3" />
                             <span>Rejeitar</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('Excluir este registro de documento?')) return;
+                              try {
+                                await deleteDocument(doc.id, doc.storage_path);
+                              } catch (err) {
+                                setDocFeedback(
+                                  err instanceof Error ? err.message : 'Erro ao excluir documento.'
+                                );
+                              }
+                            }}
+                            title="Excluir registro de documento"
+                            className="p-1.5 rounded border border-red-200 text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>

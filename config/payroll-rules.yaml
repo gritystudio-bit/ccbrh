@@ -1,0 +1,117 @@
+# ==============================================================================
+# CCB RH — Regras de Negócio e Parâmetros Legais (PF / CLT e PJ / NFS-e)
+# Fonte única de verdade para cálculos trabalhistas, férias, licenças e tributos.
+# Bases legais de referência em ./base_legais/:
+#   - Decreto-Lei nº 5.452/1943 (CLT Consolidada)
+#   - Lei nº 13.467/2017 (Reforma Trabalhista)
+#   - Lei nº 15.270/2025 (Isenção de IRPF até R$ 5.000,00 e redução até R$ 7.350,00)
+# ==============================================================================
+
+meta:
+  version: "2026.2"
+  effective_from: "2026-01-01"
+  legal_basis:
+    - "Decreto-Lei nº 5.452/1943 (CLT - Jornada, Férias Arts. 129-145, Licenças Art. 473)"
+    - "Lei nº 13.467/2017 (Reforma Trabalhista - Fracionamento de Férias Art. 134 §1º)"
+    - "Lei nº 15.270/2025 (Isenção IRPF até R$ 5.000 Mensal e no 13º Salário - Arts. 2º e 3º)"
+    - "Decreto nº 9.580/2018 (RIR/2018 - Regulamento do Imposto sobre a Renda PF e PJ)"
+    - "Lei nº 8.213/1991 (Benefícios Previdenciários - Afastamentos INSS e Salário-Maternidade)"
+    - "Lei nº 7.418/1985 (Vale-Transporte)"
+
+clt_defaults:
+  minimum_wage: 1621.00
+  patronal_inss_rate: 0.20
+  fgts_rate: 0.08
+  monthly_hours_divisor: 220
+  commercial_month_days: 30
+  overtime_50_multiplier: 1.5
+  overtime_100_multiplier: 2.0
+  night_shift_rate: 0.20
+  night_hour_reduction_factor: 1.1428571428571428 # 60 / 52.5 (Art. 73 §1º CLT)
+  dsr_default_ratio: 0.20
+  hazard_pay_rate: 0.30
+  vt_discount_cap_rate: 0.06
+  default_vt_opted_in: true
+  default_vr_discount: 0.00
+  dependent_deduction: 189.59
+  simplified_irrf_discount: 607.20
+
+vacation_rules:
+  legal_reference: "Arts. 129 a 145 da CLT + Art. 134 §1º da Lei nº 13.467/2017"
+  standard_vacation_days: 30
+  concessive_period_months: 12      # Art. 134 CLT: 12 meses subsequentes ao período aquisitivo
+  expired_concessive_double_pay: true # Art. 137 CLT: férias após o prazo concessivo são pagas em dobro
+  constitutional_third_rate: 0.3333 # 1/3 Constitucional (Art. 7º XVII CF / Art. 142 CLT)
+  abono_pecuniario_max_days: 10     # Conversão de até 1/3 em abono (Art. 143 CLT) - Isento de INSS/FGTS/IRRF
+  max_split_periods: 3              # Fracionamento em até 3 períodos (Reforma Trabalhista)
+  min_first_split_days: 14          # 1º período não pode ser inferior a 14 dias corridos
+  min_other_split_days: 5           # Demais períodos não podem ser inferiores a 5 dias corridos cada
+  absence_reduction_scale:          # Art. 130 da CLT (Proporção de férias conforme faltas injustificadas)
+    - max_absences: 5
+      entitled_days: 30
+    - max_absences: 14
+      entitled_days: 24
+    - max_absences: 23
+      entitled_days: 18
+    - max_absences: 32
+      entitled_days: 12
+
+leave_rules:
+  legal_reference: "Arts. 392, 473 e 476 da CLT + Arts. 60 e 72 da Lei nº 8.213/1991"
+  medical_leave_company_paid_days: 15 # Primeiros 15 dias pagos pela empresa; a partir do 16º dia via INSS
+  accident_leave_keep_fgts: true      # Acidente de trabalho mantém recolhimento de FGTS 8% no afastamento
+  maternity_leave_days: 120           # Art. 392 CLT (120 dias com compensação integral na guia de INSS)
+  maternity_offset_inss_patronal: true
+  paternity_leave_days: 5             # Art. 473 III CLT c/c Art. 10 §1º ADCT (5 dias remunerados)
+  marriage_leave_days: 3              # Art. 473 II CLT - Gala / Casamento (3 dias consecutivos)
+  bereavement_leave_days: 2           # Art. 473 I CLT - Nojo / Falecimento (2 dias consecutivos)
+
+thirteenth_salary_rules:
+  legal_reference: "Lei nº 4.090/1962 + Art. 3º da Lei nº 15.270/2025"
+  first_installment_share: 0.50       # 1ª parcela (50% sem incidência de INSS/IRRF no adiantamento)
+  apply_lei_15270_exclusive_irrf: true # Art. 3º Lei 15.270/2025: isenção até R$ 5.000 também no 13º
+
+inss_brackets:
+  - up_to: 1621.00
+    rate: 0.075
+  - up_to: 2902.84
+    rate: 0.09
+  - up_to: 4354.27
+    rate: 0.12
+  - up_to: 8475.55
+    rate: 0.14
+
+irrf_table:
+  - up_to: 2428.80
+    rate: 0.0
+    deduction: 0.0
+  - up_to: 2826.65
+    rate: 0.075
+    deduction: 182.16
+  - up_to: 3751.05
+    rate: 0.15
+    deduction: 394.16
+  - up_to: 4664.68
+    rate: 0.225
+    deduction: 675.49
+  - up_to: null
+    rate: 0.275
+    deduction: 908.73
+
+irrf_lei_15270_reduction:
+  enabled: true
+  legal_reference: "Lei nº 15.270/2025, Arts. 2º e 3º (Art. 3º-A da Lei nº 9.250/1995)"
+  full_exemption_limit: 5000.00
+  max_reduction_amount: 312.89
+  transition_upper_limit: 7350.00
+  transition_constant: 978.62
+  transition_slope: 0.133145
+
+pj_defaults:
+  require_nfse: true
+  nfse_due_day: 5
+  auto_proportional_dates: true
+  default_iss_rate: 0.0
+  default_irrf_rate: 0.0
+  default_pcc_rate: 0.0
+  legal_note: "Contratos PJ (B2B): sem encargos CLT (INSS empregado, FGTS, 13º, Férias ou VT). Controle focado em valor a emitir na NFS-e e eventuais retenções na fonte configuradas."

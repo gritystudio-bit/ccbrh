@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
-import { DocumentType } from '../types/database';
+import React, { useState, useEffect } from 'react';
+import { useCcb } from '../context/CcbContext';
+import { Candidate, DocumentRecord, DocumentType } from '../types/database';
+import { supabase } from '../lib/supabase';
+import { triggerBrowserDownload } from '../utils/documentViewer';
 import {
   FileCheck,
   Upload,
@@ -12,10 +14,16 @@ import {
   RefreshCw,
   XCircle,
   Check,
+  Loader2,
+  KeyRound,
+  ExternalLink,
+  Download,
+  X,
 } from 'lucide-react';
 
 interface CandidatePortalModuleProps {
   initialToken?: string | null;
+  isPublic?: boolean;
 }
 
 const REQUIRED_DOCS: { type: DocumentType; label: string; desc: string }[] = [
@@ -43,6 +51,7 @@ const REQUIRED_DOCS: { type: DocumentType; label: string; desc: string }[] = [
 
 export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
   initialToken,
+  isPublic = false,
 }) => {
   const {
     candidates,
@@ -51,7 +60,17 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
     uploadCandidateDocument,
     updateDocumentStatus,
     reissueCandidateToken,
-  } = useHireGrid();
+    getDocumentSignedUrl,
+  } = useCcb();
+
+  const [tokenInput, setTokenInput] = useState<string>(initialToken || '');
+  const [publicData, setPublicData] = useState<{
+    candidate: Candidate;
+    companyName: string;
+    documents: DocumentRecord[];
+  } | null>(null);
+  const [loadingPublic, setLoadingPublic] = useState(false);
+  const [publicError, setPublicError] = useState<string | null>(null);
 
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>(() => {
     if (initialToken) {
@@ -64,10 +83,98 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
     return candInProposal?.id || candidates[0]?.id || '';
   });
 
-  const [activeRoleView, setActiveRoleView] = useState<'candidate' | 'recruiter'>('candidate');
+  const [activeRoleView, setActiveRoleView] = useState<'candidate' | 'recruiter'>(
+    isPublic ? 'candidate' : 'recruiter'
+  );
+  const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{
+    url: string;
+    label: string;
+    fileName: string;
+    storagePath: string;
+  } | null>(null);
 
-  const candidate = candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
+  const loadPublicByToken = async (token: string) => {
+    const clean = token.trim();
+    if (!clean) return;
+    setLoadingPublic(true);
+    setPublicError(null);
+    try {
+      const { data, error } = await supabase.rpc('get_candidate_portal_by_token', {
+        p_token: clean,
+      });
+      if (error || !data) {
+        setPublicData(null);
+        setPublicError('Chave de acesso não encontrada ou inválida.');
+      } else {
+        setPublicData({
+          candidate: data.candidate as Candidate,
+          companyName: data.company?.name || 'Empresa Contratante',
+          documents: (data.documents || []) as DocumentRecord[],
+        });
+      }
+    } catch {
+      setPublicError('Erro ao consultar seu portal de documentos.');
+    } finally {
+      setLoadingPublic(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isPublic && initialToken) {
+      loadPublicByToken(initialToken);
+    }
+  }, [isPublic, initialToken]);
+
+  if (isPublic && !publicData) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-10">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#082175] text-[#f5a90e] flex items-center justify-center">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#082175]">Acessar Portal do Candidato</h2>
+              <p className="text-xs text-slate-500">
+                Informe a chave de acesso exclusiva enviada pela equipe ccbrh.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="Cole seu token UUID aqui..."
+              className="flex-1 px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
+            />
+            <button
+              type="button"
+              disabled={loadingPublic}
+              onClick={() => loadPublicByToken(tokenInput)}
+              className="px-4 py-2 rounded-lg bg-[#082175] text-white text-xs font-semibold hover:bg-[#0a2a8a] inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              {loadingPublic && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Entrar</span>
+            </button>
+          </div>
+
+          {publicError && (
+            <p className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+              {publicError}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const candidate = isPublic
+    ? publicData!.candidate
+    : candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
 
   if (!candidate) {
     return (
@@ -80,19 +187,83 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
   const now = new Date();
   const tokenExpiresAt = new Date(candidate.token_expires_at);
   const isExpired = tokenExpiresAt < now;
-  const candidateDocs = documents.filter((d) => d.candidate_id === candidate.id);
+  const candidateDocs = isPublic
+    ? publicData!.documents
+    : documents.filter((d) => d.candidate_id === candidate.id);
+  const companyDisplayName = isPublic
+    ? publicData!.companyName
+    : currentCompany?.name || 'Empresa';
 
-  const handleSimulateUpload = (type: DocumentType) => {
+  const handleFileUpload = async (type: DocumentType, file: File) => {
     if (isExpired) {
-      setUploadFeedback('Atenção: O link de autoenvio expirou. O envio foi bloqueado até a renovação do link.');
+      setUploadFeedback(
+        'Atenção: O link de autoenvio expirou. O envio foi bloqueado até a renovação do link.'
+      );
       setTimeout(() => setUploadFeedback(null), 4000);
       return;
     }
 
-    const mockFileName = `${type.toLowerCase()}_${candidate.full_name.toLowerCase().replace(/\s+/g, '_')}.pdf`;
-    uploadCandidateDocument(candidate.id, type, mockFileName);
-    setUploadFeedback(`Documento "${type}" enviado com sucesso para a pasta segura da empresa!`);
-    setTimeout(() => setUploadFeedback(null), 3000);
+    setUploadingType(type);
+    setUploadFeedback(null);
+    try {
+      if (isPublic) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const objectPath = `portal/${candidate.document_token}/${type}_${Date.now()}_${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from('ccbrh-docs')
+          .upload(objectPath, file, { upsert: true });
+        if (upErr) throw upErr;
+
+        const { error: rpcErr } = await supabase.rpc('submit_candidate_document_by_token', {
+          p_token: candidate.document_token,
+          p_document_type: type,
+          p_storage_path: `ccbrh-docs/${objectPath}`,
+        });
+        if (rpcErr) throw rpcErr;
+
+        await loadPublicByToken(candidate.document_token);
+      } else {
+        await uploadCandidateDocument(candidate.id, type, file);
+      }
+      setUploadFeedback(`Documento "${type}" enviado com sucesso para a pasta segura!`);
+      setTimeout(() => setUploadFeedback(null), 3500);
+    } catch (err: unknown) {
+      setUploadFeedback(
+        err instanceof Error ? err.message : 'Erro ao enviar arquivo. Tente novamente.'
+      );
+    } finally {
+      setUploadingType(null);
+    }
+  };
+
+  const handleOpenOrDownloadDoc = async (
+    storagePath: string,
+    label: string,
+    isDownload = false
+  ) => {
+    const rawFileName = storagePath.split('/').pop() || 'documento.pdf';
+    const cleanFileName = rawFileName.replace(/^\d{10,}_/, '');
+    const url = await getDocumentSignedUrl(
+      storagePath,
+      isDownload ? { download: cleanFileName } : undefined
+    );
+    if (!url) {
+      setUploadFeedback(
+        `O arquivo "${cleanFileName}" foi registrado antes da sincronização do Storage. Reenvie o arquivo PDF/Imagem para visualizá-lo.`
+      );
+      return;
+    }
+
+    if (isDownload) {
+      triggerBrowserDownload(url, cleanFileName);
+    } else {
+      setPreviewDoc({
+        url,
+        label,
+        fileName: cleanFileName,
+        storagePath,
+      });
+    }
   };
 
   return (
@@ -108,46 +279,51 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
           </h2>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-medium">Candidato:</span>
-            <select
-              aria-label="Selecionar Candidato"
-              value={candidate.id}
-              onChange={(e) => setSelectedCandidateId(e.target.value)}
-              className="bg-slate-50 text-[#03416A] border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium outline-none focus:border-[#082175]"
-            >
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name} ({c.pipeline_stage}) {new Date(c.token_expires_at) < now ? '[Link Vencido]' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+        {!isPublic && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-500 font-medium">Candidato:</span>
+              <select
+                aria-label="Selecionar Candidato"
+                value={candidate.id}
+                onChange={(e) => setSelectedCandidateId(e.target.value)}
+                className="bg-slate-50 text-[#03416A] border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium outline-none focus:border-[#082175]"
+              >
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.full_name} ({c.pipeline_stage}){' '}
+                    {new Date(c.token_expires_at) < now ? '[Link Vencido]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
-            <button
-              onClick={() => setActiveRoleView('candidate')}
-              className={`px-3 py-1.5 rounded transition-colors ${
-                activeRoleView === 'candidate'
-                  ? 'bg-white text-[#082175] shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              Visão do Candidato
-            </button>
-            <button
-              onClick={() => setActiveRoleView('recruiter')}
-              className={`px-3 py-1.5 rounded transition-colors ${
-                activeRoleView === 'recruiter'
-                  ? 'bg-white text-[#082175] shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              Revisão do RH
-            </button>
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setActiveRoleView('recruiter')}
+                className={`px-3 py-1.5 rounded transition-colors cursor-pointer ${
+                  activeRoleView === 'recruiter'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-600 hover:text-[#082175]'
+                }`}
+              >
+                Revisão do RH
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveRoleView('candidate')}
+                className={`px-3 py-1.5 rounded transition-colors cursor-pointer ${
+                  activeRoleView === 'candidate'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-600 hover:text-[#082175]'
+                }`}
+              >
+                Visão do Candidato
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {uploadFeedback && (
@@ -165,29 +341,30 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
               <AlertTriangle className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="font-bold text-amber-950 text-sm">
-                Link de Autoenvio Expirado
-              </h4>
+              <h4 className="font-bold text-amber-950 text-sm">Link de Autoenvio Expirado</h4>
               <p className="text-amber-800 mt-0.5">
                 O link temporário venceu em{' '}
                 <strong className="underline font-mono">
-                  {tokenExpiresAt.toLocaleDateString('pt-BR')} às {tokenExpiresAt.toLocaleTimeString('pt-BR')}
+                  {tokenExpiresAt.toLocaleDateString('pt-BR')} às{' '}
+                  {tokenExpiresAt.toLocaleTimeString('pt-BR')}
                 </strong>
-                . Para prosseguir com o envio, realize a renovação do link.
+                . Para prosseguir com o envio, solicite a renovação do link ao RH.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              reissueCandidateToken(candidate.id);
-              alert('Link de upload renovado com sucesso por mais 7 dias!');
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-bold transition-colors shadow-xs"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#f5a90e]" />
-            <span>Renovar Link (+7 dias)</span>
-          </button>
+          {!isPublic && (
+            <button
+              onClick={async () => {
+                await reissueCandidateToken(candidate.id);
+                setUploadFeedback('Link renovado com sucesso por mais 7 dias!');
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-bold transition-colors shadow-xs cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span>Renovar Link (+7 dias)</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="p-3.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 shadow-xs">
@@ -211,7 +388,7 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-[#9F8548]">
-            Admissão em {currentCompany.name}
+            Admissão em {companyDisplayName}
           </p>
           <h1 className="text-xl sm:text-2xl font-bold text-[#082175] mt-0.5">
             {candidate.full_name}
@@ -251,6 +428,7 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
             const isApproved = existingDoc?.status === 'approved';
             const isPending = existingDoc?.status === 'pending_review';
             const isRejected = existingDoc?.status === 'rejected';
+            const isUploadingThis = uploadingType === docDef.type;
 
             return (
               <div
@@ -308,48 +486,102 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
                       </span>
                     )}
                     {!existingDoc && (
-                      <span className="text-[11px] font-medium text-slate-400">
-                        Pendente
-                      </span>
+                      <span className="text-[11px] font-medium text-slate-400">Pendente</span>
                     )}
                   </div>
                 </div>
 
                 {existingDoc && (
-                  <div className="mt-3 p-2 bg-slate-50 rounded-lg border border-slate-200 text-[10px] font-mono text-slate-600 flex items-center justify-between">
-                    <span className="truncate max-w-[260px]">
-                      {existingDoc.storage_path}
-                    </span>
-                    <span className="text-slate-400 tabular-nums">
-                      {new Date(existingDoc.uploaded_at).toLocaleDateString('pt-BR')}
-                    </span>
+                  <div className="mt-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[10px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-slate-700">
+                        {(existingDoc.storage_path.split('/').pop() || existingDoc.storage_path).replace(
+                          /^\d{10,}_/,
+                          ''
+                        )}
+                      </span>
+                      <span className="text-slate-400 tabular-nums">
+                        Enviado em {new Date(existingDoc.uploaded_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 font-sans">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleOpenOrDownloadDoc(
+                            existingDoc.storage_path,
+                            docDef.label,
+                            false
+                          )
+                        }
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[#082175] hover:bg-slate-100 text-[11px] font-semibold cursor-pointer shadow-2xs"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Ver</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleOpenOrDownloadDoc(
+                            existingDoc.storage_path,
+                            docDef.label,
+                            true
+                          )
+                        }
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#E0F4F7]/70 border border-[#082175]/20 text-[#082175] hover:bg-[#E0F4F7] text-[11px] font-semibold cursor-pointer"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Baixar</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  {activeRoleView === 'candidate' ? (
-                    <button
-                      onClick={() => handleSimulateUpload(docDef.type)}
-                      disabled={isExpired}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] disabled:opacity-40 text-white font-semibold text-xs transition-colors shadow-xs"
+                  {isPublic || activeRoleView === 'candidate' ? (
+                    <label
+                      className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs transition-colors shadow-xs ${
+                        isExpired || isUploadingThis ? 'opacity-40 pointer-events-none' : 'cursor-pointer'
+                      }`}
                     >
-                      <Upload className="w-3.5 h-3.5 text-[#f5a90e]" />
-                      <span>{existingDoc ? 'Reenviar Arquivo' : 'Fazer Upload do Arquivo'}</span>
-                    </button>
+                      {isUploadingThis ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#f5a90e]" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-[#f5a90e]" />
+                      )}
+                      <span>
+                        {isUploadingThis
+                          ? 'Enviando arquivo...'
+                          : existingDoc
+                          ? 'Reenviar Arquivo (PDF/Imagem)'
+                          : 'Anexar e Enviar Arquivo'}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                        disabled={isExpired || isUploadingThis}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(docDef.type, file);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
                   ) : existingDoc ? (
                     <div className="w-full flex items-center justify-between gap-2">
                       <span className="text-xs text-slate-500">Decisão do RH:</span>
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => updateDocumentStatus(existingDoc.id, 'approved')}
-                          className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1"
+                          className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Check className="w-3 h-3" />
                           <span>Aprovar</span>
                         </button>
                         <button
                           onClick={() => updateDocumentStatus(existingDoc.id, 'rejected')}
-                          className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 text-xs font-semibold flex items-center gap-1"
+                          className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <XCircle className="w-3 h-3" />
                           <span>Rejeitar</span>
@@ -366,6 +598,55 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
             );
           })}
         </div>
+
+        {/* Visualizador Integrado do Documento no Portal */}
+        {previewDoc && (
+          <div className="border border-[#082175]/20 rounded-xl overflow-hidden bg-slate-50 shadow-xs mt-4">
+            <div className="px-4 py-2.5 bg-[#082175] text-white flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-[#f5a90e] shrink-0" />
+                <span className="font-bold truncate">{previewDoc.label}</span>
+                <span className="text-[11px] text-white/75 font-mono truncate">
+                  ({previewDoc.fileName})
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Nova Guia</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleOpenOrDownloadDoc(previewDoc.storagePath, previewDoc.label, true)
+                  }
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#f5a90e] hover:bg-[#e09806] text-[#082175] text-[11px] font-bold cursor-pointer"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Baixar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1 rounded hover:bg-white/20 text-white cursor-pointer"
+                  title="Fechar visualização"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={previewDoc.url}
+              title={previewDoc.label}
+              className="w-full h-[460px] bg-white border-0"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

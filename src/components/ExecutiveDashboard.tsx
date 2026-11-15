@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   Users,
   DollarSign,
@@ -7,15 +7,14 @@ import {
   UserCheck,
   AlertTriangle,
   ArrowUpRight,
-  Send,
-  Loader2,
   ChevronRight,
   RefreshCw,
-  BarChart3,
 } from 'lucide-react';
 
 interface ExecutiveDashboardProps {
-  onNavigateTab: (tab: 'recruitment' | 'vacancies' | 'employees' | 'documents' | 'portal') => void;
+  onNavigateTab: (
+    tab: 'recruitment' | 'vacancies' | 'employees' | 'payroll' | 'legal' | 'portal'
+  ) => void;
 }
 
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNavigateTab }) => {
@@ -29,11 +28,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
     documents,
     metrics,
     reissueCandidateToken,
-  } = useHireGrid();
+  } = useCcb();
+
+  const companyName = currentCompany?.name || 'Empresa Cliente';
 
   const isVarandaClient =
-    currentCompany.id === '6aad6854-8c72-8d7b-6fc7-597100000001' ||
-    currentCompany.name.toLowerCase().includes('varanda');
+    currentCompany?.id === '6aad6854-8c72-8d7b-6fc7-597100000001' ||
+    companyName.toLowerCase().includes('varanda');
 
   const [breakdownMode, setBreakdownMode] = useState<'department' | 'role'>(
     isVarandaClient ? 'role' : 'department'
@@ -42,10 +43,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
   useEffect(() => {
     setBreakdownMode(isVarandaClient ? 'role' : 'department');
   }, [currentTenantId, isVarandaClient]);
-
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
 
   // Departments breakdown
   const departments = Array.from(new Set(jobs.map((j) => j.department)));
@@ -112,105 +109,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
   const pendingReviewDocs = documents.filter((d) => d.status === 'pending_review');
   const approvedCandidates = candidates.filter((c) => c.pipeline_stage === 'aprovado');
 
-  const handleAskCopilot = async (customText?: string) => {
-    const prompt = (customText || aiPrompt).trim();
-    if (!prompt || aiLoading) return;
-
-    setAiLoading(true);
-    setAiResponse(null);
-
-    const contextData = {
-      tenantId: currentTenantId,
-      tenantName: currentCompany.name,
-      tenantCnpj: currentCompany.cnpj,
-      totalHeadcount: employees.length,
-      activeEmployeesCount: metrics.activeHeadcount,
-      totalPayroll: `R$ ${metrics.totalPayroll.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      averageSalary: `R$ ${metrics.averageSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      departments: departments,
-      activeVacanciesCount: metrics.activeVacanciesCount,
-      candidatesCount: candidates.length,
-      expiredTokensCount: expiredCandidates.length,
-    };
-
-    try {
-      const response = await fetch('/api/ai/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          tenantId: currentTenantId,
-          tenantName: currentCompany.name,
-          tenantCnpj: currentCompany.cnpj,
-          contextData,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.text) {
-        setAiResponse(data.text);
-      }
-    } catch (err: any) {
-      console.error('Error fetching copilot:', err);
-      setAiResponse(
-        `### 🌐 [RESUMO GERENCIAL]\n\n### 📊 Análise do Agente\nNão foi possível completar a consulta no momento: ${err.message}.\n\n### ⚡ Ações Recomendadas\n- Verifique as métricas consolidadas acima ou tente novamente.`
-      );
-    } finally {
-      setAiLoading(false);
-      setAiPrompt('');
-    }
-  };
-
-  const renderFormattedMarkdown = (text: string) => {
-    const lines = text.split('\n');
-    return (
-      <div className="space-y-2 text-xs sm:text-sm text-slate-700 leading-relaxed">
-        {lines.map((line, idx) => {
-          if (line.startsWith('### 🌐')) {
-            return (
-              <div
-                key={idx}
-                className="text-xs font-semibold text-[#9F8548] tracking-wide"
-              >
-                {line.replace('### 🌐', '').trim()}
-              </div>
-            );
-          }
-          if (line.startsWith('### 📊')) {
-            return (
-              <h4
-                key={idx}
-                className="font-bold text-[#03416A] text-sm mt-3 pt-2 border-t border-slate-200"
-              >
-                {line.replace('### 📊', '').trim()}
-              </h4>
-            );
-          }
-          if (line.startsWith('### ⚡')) {
-            return (
-              <h4
-                key={idx}
-                className="font-bold text-[#082175] text-sm mt-3 pt-2 border-t border-slate-200"
-              >
-                {line.replace('### ⚡', '').trim()}
-              </h4>
-            );
-          }
-          if (line.startsWith('- ')) {
-            return (
-              <div key={idx} className="flex items-start gap-2 pl-2 py-0.5 text-slate-700">
-                <span className="text-[#9F8548] font-bold">•</span>
-                <span>{line.substring(2)}</span>
-              </div>
-            );
-          }
-          if (!line.trim()) return <div key={idx} className="h-0.5" />;
-          return <p key={idx}>{line}</p>;
-        })}
-      </div>
-    );
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Top Banner */}
@@ -220,20 +118,27 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
             Painel da Diretoria e Gestão de Pessoas
           </p>
           <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Resumo Gerencial · {currentCompany.name}
+            Resumo Gerencial · {companyName}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Acompanhamento consolidado do quadro de colaboradores, folha de pagamento, contratações e documentos.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => onNavigateTab('recruitment')}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
           >
             <Briefcase className="w-3.5 h-3.5 text-[#f5a90e]" />
             <span>Processo Seletivo</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('payroll')}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#9F8548]/15 hover:bg-[#9F8548]/25 text-[#9F8548] font-semibold text-xs transition-colors"
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            <span>Folha de Pagamento</span>
           </button>
           <button
             onClick={() => onNavigateTab('employees')}
@@ -344,8 +249,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
                   </p>
                 </div>
                 <button
-                  onClick={() => {
-                    expiredCandidates.forEach((c) => reissueCandidateToken(c.id));
+                  onClick={async () => {
+                    await Promise.all(
+                      expiredCandidates.map((c) => reissueCandidateToken(c.id))
+                    );
                     alert('Todos os links vencidos foram renovados por mais 7 dias!');
                   }}
                   className="mt-2.5 text-xs font-bold text-[#9F8548] hover:text-[#082175] flex items-center gap-1 transition-colors"
@@ -367,10 +274,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
                   </p>
                 </div>
                 <button
-                  onClick={() => onNavigateTab('documents')}
+                  onClick={() => onNavigateTab('recruitment')}
                   className="mt-2.5 text-xs font-bold text-[#082175] hover:text-[#9F8548] flex items-center gap-1 transition-colors"
                 >
-                  <span>Conferir no Repositório</span>
+                  <span>Conferir em Recrutamento</span>
                   <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
@@ -399,10 +306,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
         </div>
       )}
 
-      {/* Main Grid: Departmental Breakdown & Assistente */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quadro e Custos por Cargo / Departamento */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+      {/* Quadro e Custos por Cargo / Departamento */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
               <h3 className="font-bold text-[#082175] text-sm">
@@ -446,7 +351,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
                 onClick={() => onNavigateTab('employees')}
                 className="text-xs font-semibold text-[#03416A] hover:text-[#9F8548] flex items-center gap-1 transition-colors cursor-pointer"
               >
-                <span>Ver Organograma</span>
+                <span>Ver Funcionários</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -562,104 +467,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
               </table>
             )}
           </div>
-        </div>
-
-        {/* Consultor Analítico de RH */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-              <div className="w-8 h-8 rounded-lg bg-[#082175] text-[#f5a90e] flex items-center justify-center">
-                <BarChart3 className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-bold text-[#082175] text-sm">
-                  Consultoria Analítica de RH
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Consultas rápidas sobre folha, cargos e seleção
-                </p>
-              </div>
-            </div>
-
-            {/* Quick question chips */}
-            <div className="space-y-1.5 mt-3">
-              <button
-                onClick={() =>
-                  handleAskCopilot(
-                    'Identifique possíveis diferenças ou distorções salariais no quadro de funcionários desta empresa e mostre a média por setor em português claro.'
-                  )
-                }
-                className="w-full text-left p-2.5 rounded-lg bg-slate-50 hover:bg-[#E0F4F7]/60 border border-slate-200 text-xs text-[#03416A] font-medium transition-colors flex items-center justify-between"
-              >
-                <span>Analisar diferenças salariais por setor</span>
-                <ChevronRight className="w-3.5 h-3.5 text-[#9F8548]" />
-              </button>
-
-              <button
-                onClick={() =>
-                  handleAskCopilot(
-                    'Faça um levantamento dos candidatos que estão aguardando contratação ou envio de documentos e aponte o que precisa ser feito.'
-                  )
-                }
-                className="w-full text-left p-2.5 rounded-lg bg-slate-50 hover:bg-[#E0F4F7]/60 border border-slate-200 text-xs text-[#03416A] font-medium transition-colors flex items-center justify-between"
-              >
-                <span>Conferir documentos e links de candidatos</span>
-                <ChevronRight className="w-3.5 h-3.5 text-[#9F8548]" />
-              </button>
-
-              <button
-                onClick={() =>
-                  handleAskCopilot(
-                    'Explique o passo a passo para admitir a candidata Mariana Rocha Alencar de forma automática no sistema.'
-                  )
-                }
-                className="w-full text-left p-2.5 rounded-lg bg-slate-50 hover:bg-[#E0F4F7]/60 border border-slate-200 text-xs text-[#03416A] font-medium transition-colors flex items-center justify-between"
-              >
-                <span>Como admitir candidatos aprovados</span>
-                <ChevronRight className="w-3.5 h-3.5 text-[#9F8548]" />
-              </button>
-            </div>
-
-            {/* Response area */}
-            {aiLoading && (
-              <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-2 text-xs text-[#03416A]">
-                <Loader2 className="w-4 h-4 animate-spin text-[#082175]" />
-                <span>Consultando os dados da empresa...</span>
-              </div>
-            )}
-
-            {aiResponse && (
-              <div className="mt-3 p-3.5 bg-slate-50 rounded-lg border border-slate-200 max-h-72 overflow-y-auto">
-                {renderFormattedMarkdown(aiResponse)}
-              </div>
-            )}
-          </div>
-
-          {/* Prompt input */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleAskCopilot();
-            }}
-            className="pt-2 border-t border-slate-100 flex items-center gap-2"
-          >
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Pergunte sobre folha, vagas ou equipe..."
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#082175]"
-              disabled={aiLoading}
-            />
-            <button
-              type="submit"
-              disabled={aiLoading || !aiPrompt.trim()}
-              className="px-3.5 py-2 bg-[#082175] hover:bg-[#0a2a8a] disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
-        </div>
       </div>
     </div>
   );

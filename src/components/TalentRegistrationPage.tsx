@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useCcb } from '../context/CcbContext';
 import {
   ArrowLeft,
   Briefcase,
@@ -67,7 +68,9 @@ export const TalentRegistrationPage: React.FC<TalentRegistrationPageProps> = ({
   onBackToLanding,
   onViewVacancies,
 }) => {
+  const { submitTalentRegistration } = useCcb();
   const [form, setForm] = useState<TalentFormData>(INITIAL_FORM);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -81,10 +84,9 @@ export const TalentRegistrationPage: React.FC<TalentRegistrationPageProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setTimeout(() => {
-      updateField('curriculoNome', file.name);
-      setUploading(false);
-    }, 250);
+    setResumeFile(file);
+    updateField('curriculoNome', file.name);
+    setUploading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,24 +100,41 @@ export const TalentRegistrationPage: React.FC<TalentRegistrationPageProps> = ({
 
     setSubmitting(true);
     try {
-      const response = await fetch('/api/talent-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
+      await submitTalentRegistration(
+        {
+          nome: form.nome.trim(),
+          email: form.email.trim(),
+          telefone: form.telefone.trim(),
+          cpf: form.cpf.trim(),
+          data_nascimento: form.data_nascimento || undefined,
+          endereco: form.endereco.trim(),
+          cidade: form.cidade.trim(),
+          estado: form.estado.trim(),
+          cep: form.cep.trim(),
+          formacao: form.formacao.trim(),
+          instituicao: form.instituicao.trim(),
+          area_formacao: form.area_formacao.trim(),
+          experiencias: form.experiencias.trim(),
+          habilidades: form.habilidades.trim(),
+          idiomas: form.idiomas.trim(),
           pretensao_salarial: form.pretensao_salarial ? Number(form.pretensao_salarial) : null,
-          status: 'disponivel',
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setError(data.error || 'Erro ao cadastrar. Tente novamente.');
-      } else {
-        setSubmitted(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch {
-      setError('Erro de comunicação ao enviar o cadastro. Tente novamente.');
+          cargo_desejado: form.cargo_desejado.trim(),
+          area_interesse: form.area_interesse.trim(),
+          disponibilidade: form.disponibilidade,
+          regime_preferido: form.regime_preferido,
+          linkedin: form.linkedin.trim() || null,
+          curriculo_url: null,
+        },
+        resumeFile
+      );
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Erro de comunicação ao enviar o cadastro. Tente novamente.'
+      );
     } finally {
       setSubmitting(false);
     }

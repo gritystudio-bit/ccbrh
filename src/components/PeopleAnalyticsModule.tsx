@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   BarChart3,
   TrendingUp,
@@ -15,7 +15,7 @@ import {
 import { PEOPLE_ANALYTICS_SQL, SALARY_DISTORTION_SQL } from '../utils/sqlTemplates';
 
 export const PeopleAnalyticsModule: React.FC = () => {
-  const { currentCompany, currentTenantId, employees, jobs, metrics } = useHireGrid();
+  const { currentCompany, currentTenantId, employees, jobs, metrics } = useCcb();
 
   const [copiedSql, setCopiedSql] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'distortions' | 'sql'>('overview');

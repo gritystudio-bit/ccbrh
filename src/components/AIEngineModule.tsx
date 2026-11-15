@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   Sparkles,
   Send,
@@ -66,7 +66,7 @@ export const AIEngineModule: React.FC = () => {
     candidates,
     documents,
     metrics,
-  } = useHireGrid();
+  } = useCcb();
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,11 +76,11 @@ export const AIEngineModule: React.FC = () => {
     {
       id: 'welcome-1',
       sender: 'agent',
-      text: `### 🌐 [MÓDULO DO HIREGRID RELACIONADO]
+      text: `### 🌐 [MÓDULO CCBRH RELACIONADO]
 Core & People Analytics
 
 ### 📊 Análise do Agente
-Motor de Inteligência Artificial do **HireGrid** conectado ao tenant **${currentCompany.name}** (\`tenant_id: ${currentTenantId}\`, CNPJ: \`${currentCompany.cnpj}\`).
+Motor de Inteligência Artificial conectado à empresa **${currentCompany?.name || 'Sem empresa selecionada'}** (\`tenant_id: ${currentTenantId || '-'}\`, CNPJ: \`${currentCompany?.cnpj || '-'}\`).
 
 - **Isolamento Multi-Tenant:** Ativo e aplicado via Row Level Security (RLS) no Supabase.
 - **Quadro Funcional:** ${metrics.activeHeadcount} colaboradores ativos monitorados.
@@ -121,10 +121,12 @@ Estou pronto para executar auditorias analíticas, gerar transações atômicas 
     setLoading(true);
 
     // Prepare real-time context data for this specific tenant
+    const companyName = currentCompany?.name || 'Empresa Cliente';
+    const companyCnpj = currentCompany?.cnpj || '';
     const contextData = {
       tenantId: currentTenantId,
-      tenantName: currentCompany.name,
-      tenantCnpj: currentCompany.cnpj,
+      tenantName: companyName,
+      tenantCnpj: companyCnpj,
       totalHeadcount: employees.length,
       activeEmployeesCount: metrics.activeHeadcount,
       totalPayroll: `R$ ${metrics.totalPayroll.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
@@ -152,8 +154,8 @@ Estou pronto para executar auditorias analíticas, gerar transações atômicas 
         body: JSON.stringify({
           prompt,
           tenantId: currentTenantId,
-          tenantName: currentCompany.name,
-          tenantCnpj: currentCompany.cnpj,
+          tenantName: companyName,
+          tenantCnpj: companyCnpj,
           contextData,
         }),
       });
@@ -177,8 +179,8 @@ Estou pronto para executar auditorias analíticas, gerar transações atômicas 
       } else {
         throw new Error(data.error || 'Falha na resposta do modelo.');
       }
-    } catch (err: any) {
-      console.error('Error querying AI Engine:', err);
+    } catch (err: unknown) {
+      const errorText = err instanceof Error ? err.message : 'Erro desconhecido';
       const errorMessage: Message = {
         id: `agent-${Date.now()}`,
         sender: 'agent',
@@ -186,7 +188,7 @@ Estou pronto para executar auditorias analíticas, gerar transações atômicas 
 Core & People Analytics
 
 ### 📊 Análise do Agente
-Ocorreu uma instabilidade na comunicação com o motor analítico de inteligência: ${err.message || 'Erro desconhecido'}.
+Ocorreu uma instabilidade na comunicação com o motor analítico de inteligência: ${errorText}.
 
 ### ⚡ Ações Recomendadas
 - Tentar reenviar a requisição em alguns instantes.
@@ -342,7 +344,7 @@ Ocorreu uma instabilidade na comunicação com o motor analítico de inteligênc
               ENGINE V2.4
             </span>
             <h1 className="text-xl font-extrabold text-white tracking-tight">
-              Motor Oficial de Inteligência Artificial do HireGrid
+              Motor Oficial de Inteligência Artificial do CCB
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -354,7 +356,7 @@ Ocorreu uma instabilidade na comunicação com o motor analítico de inteligênc
         <div className="flex items-center gap-2 text-xs">
           <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300">
             <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Escopo Isolado: <strong>{currentCompany.name.split(' ')[0]}</strong></span>
+            <span>Escopo Isolado: <strong>{(currentCompany?.name || 'CCB').split(' ')[0]}</strong></span>
           </div>
         </div>
       </div>
@@ -395,7 +397,7 @@ Ocorreu uma instabilidade na comunicação com o motor analítico de inteligênc
           >
             <div className="flex items-center gap-2 mb-1 px-1">
               <span className="text-[11px] font-semibold text-slate-400">
-                {msg.sender === 'user' ? 'Gestor de RH / Usuário' : 'HireGrid AI Engine'}
+                {msg.sender === 'user' ? 'Gestor de RH / Usuário' : 'CCB AI Engine'}
               </span>
               <span className="text-[10px] text-slate-600">{msg.timestamp}</span>
               {msg.source && (
@@ -455,7 +457,7 @@ Ocorreu uma instabilidade na comunicação com o motor analítico de inteligênc
             type="text"
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
-            placeholder={`Consulte métricas de People Analytics, RLS, status de candidatos ou SQL para ${currentCompany.name}...`}
+            placeholder={`Consulte métricas de People Analytics, RLS, status de candidatos ou SQL para ${currentCompany?.name || 'a empresa'}...`}
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
             disabled={loading}
           />

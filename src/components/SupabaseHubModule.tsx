@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   Database,
   ShieldCheck,
@@ -20,7 +20,7 @@ import {
 } from '../utils/sqlTemplates';
 
 export const SupabaseHubModule: React.FC = () => {
-  const { currentCompany, currentTenantId, database } = useHireGrid();
+  const { currentCompany, currentTenantId, database } = useCcb();
 
   const [activeTab, setActiveTab] = useState<'runner' | 'ddl' | 'rls'>('runner');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -293,7 +293,7 @@ export const SupabaseHubModule: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-200 flex items-center gap-2">
               <Table2 className="w-4 h-4 text-indigo-400" />
-              <span>DDL PostgreSQL: 6 Tabelas Relacionais do HireGrid</span>
+              <span>DDL PostgreSQL: 6 Tabelas Relacionais do CCB</span>
             </h3>
             <button
               onClick={() => copyToClipboard(SUPABASE_DDL_SCHEMA, 'ddl-schema')}

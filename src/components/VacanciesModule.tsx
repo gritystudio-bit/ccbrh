@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
-import { ApiSource, VacancyStatus } from '../types/database';
+import { useCcb } from '../context/CcbContext';
+import { ApiSource, Job, Vacancy, VacancyStatus } from '../types/database';
 import {
   Briefcase,
   Plus,
@@ -9,6 +9,9 @@ import {
   TrendingUp,
   Globe,
   X,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 
 export const VacanciesModule: React.FC = () => {
@@ -20,15 +23,32 @@ export const VacanciesModule: React.FC = () => {
     currentTenantId,
     currentCompany,
     addNewVacancy,
+    updateVacancy,
+    deleteVacancy,
     addNewJob,
+    updateJob,
+    deleteJob,
     addCompanyBranch,
-  } = useHireGrid();
+  } = useCcb();
 
+  const [activeSection, setActiveSection] = useState<'vacancies' | 'jobs'>('vacancies');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingVacancy, setEditingVacancy] = useState<Vacancy | null>(null);
+  const [savingVacancy, setSavingVacancy] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // New Vacancy Form
+  // New / Edit Job Modal
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [jobTitleInput, setJobTitleInput] = useState('');
+  const [jobDeptInput, setJobDeptInput] = useState('');
+  const [jobSalaryInput, setJobSalaryInput] = useState('');
+  const [jobDescInput, setJobDescInput] = useState('');
+  const [savingJob, setSavingJob] = useState(false);
+
+  // New / Edit Vacancy Form
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newJobId, setNewJobId] = useState(jobs[0]?.id || '');
@@ -43,7 +63,39 @@ export const VacanciesModule: React.FC = () => {
   const [customDepartment, setCustomDepartment] = useState('');
   const [customSalary, setCustomSalary] = useState('');
   const [newApiSource, setNewApiSource] = useState<ApiSource>('internal');
-  const [newStatus] = useState<VacancyStatus>('open');
+  const [newStatus, setNewStatus] = useState<VacancyStatus>('open');
+
+  const resetVacancyForm = () => {
+    setEditingVacancy(null);
+    setNewTitle('');
+    setNewDescription('');
+    setNewJobId(jobs[0]?.id || '');
+    setNewBranchId(branches[0]?.id || '');
+    setCustomDepartment('');
+    setCustomSalary('');
+    setNewBranchLabel('');
+    setNewBranchCnpj('');
+    setNewBranchEndereco('');
+    setNewBranchCidade('');
+    setNewBranchEstado('SP');
+    setShowInlineBranchForm(false);
+    setNewVacanciesCount(1);
+    setNewApiSource('internal');
+    setNewStatus('open');
+  };
+
+  const openEditVacancy = (vac: Vacancy) => {
+    setEditingVacancy(vac);
+    setNewTitle(vac.title);
+    setNewDescription(vac.description || '');
+    setNewJobId(vac.job_id || '');
+    setNewBranchId(vac.branch_id || '');
+    setNewVacanciesCount(vac.vacancies_count || 1);
+    setNewApiSource(vac.api_source);
+    setNewStatus(vac.status);
+    setShowInlineBranchForm(false);
+    setShowAddModal(true);
+  };
 
   useEffect(() => {
     setNewJobId(jobs[0]?.id || '');
@@ -109,27 +161,87 @@ export const VacanciesModule: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {feedback && (
+        <div
+          className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-semibold ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button onClick={() => setFeedback(null)} className="opacity-70 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
-            Gestão de Vagas e Atração de Talentos
+            Gestão de Vagas e Cargos
           </p>
           <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Vagas e Portais de Emprego Integrados
+            Vagas, Cargos e Portais Integrados
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Acompanhe o nível quantitativo de vagas, portais conectados (LinkedIn, Indeed) e valores orçados por cargo.
+            Gerencie vagas abertas, estrutura de cargos/salários base e portais públicos de vagas.
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
-        >
-          <Plus className="w-4 h-4 text-[#f5a90e]" />
-          <span>Publicar Nova Vaga</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <button
+              onClick={() => setActiveSection('vacancies')}
+              className={`px-3 py-1.5 rounded-md font-semibold ${
+                activeSection === 'vacancies'
+                  ? 'bg-[#082175] text-white'
+                  : 'text-slate-600 hover:text-[#082175]'
+              }`}
+            >
+              Vagas ({vacancies.length})
+            </button>
+            <button
+              onClick={() => setActiveSection('jobs')}
+              className={`px-3 py-1.5 rounded-md font-semibold ${
+                activeSection === 'jobs'
+                  ? 'bg-[#082175] text-white'
+                  : 'text-slate-600 hover:text-[#082175]'
+              }`}
+            >
+              Cargos e Salários ({jobs.length})
+            </button>
+          </div>
+
+          {activeSection === 'vacancies' ? (
+            <button
+              onClick={() => {
+                resetVacancyForm();
+                setShowAddModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
+            >
+              <Plus className="w-4 h-4 text-[#f5a90e]" />
+              <span>Publicar Nova Vaga</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setEditingJob(null);
+                setJobTitleInput('');
+                setJobDeptInput('');
+                setJobSalaryInput('');
+                setJobDescInput('');
+                setShowJobModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
+            >
+              <Plus className="w-4 h-4 text-[#f5a90e]" />
+              <span>Novo Cargo</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -260,7 +372,69 @@ export const VacanciesModule: React.FC = () => {
           </span>
         </div>
 
-        {/* Vacancies Table */}
+        {/* Vacancies vs Jobs Section */}
+        {activeSection === 'jobs' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-500 font-semibold text-[11px]">
+                  <th className="py-2.5 px-3">Cargo</th>
+                  <th className="py-2.5 px-3">Departamento</th>
+                  <th className="py-2.5 px-3 text-right">Salário Base</th>
+                  <th className="py-2.5 px-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {jobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-slate-50/80">
+                    <td className="py-3 px-3">
+                      <div className="font-bold text-[#082175]">{job.title}</div>
+                    </td>
+                    <td className="py-3 px-3 text-[#03416A] font-medium">{job.department}</td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-[#082175]">
+                      R$ {Number(job.base_salary).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingJob(job);
+                            setJobTitleInput(job.title);
+                            setJobDeptInput(job.department);
+                            setJobSalaryInput(String(job.base_salary));
+                            setShowJobModal(true);
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#082175] hover:bg-slate-50"
+                          title="Editar cargo"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Excluir o cargo "${job.title}"?`)) return;
+                            try {
+                              await deleteJob(job.id);
+                              setFeedback({ type: 'success', text: `Cargo "${job.title}" removido.` });
+                            } catch (err) {
+                              setFeedback({
+                                type: 'error',
+                                text: err instanceof Error ? err.message : 'Erro ao excluir cargo.',
+                              });
+                            }
+                          }}
+                          className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                          title="Excluir cargo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
@@ -273,6 +447,7 @@ export const VacanciesModule: React.FC = () => {
                 <th className="py-2.5 px-3 text-center">Candidatos</th>
                 <th className="py-2.5 px-3 text-center">Situação</th>
                 <th className="py-2.5 px-3 text-right">Publicação</th>
+                <th className="py-2.5 px-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -307,12 +482,12 @@ export const VacanciesModule: React.FC = () => {
                         <div>
                           <div className="font-semibold text-[#03416A]">{branch.label}</div>
                           <div className="text-[10px] font-mono text-slate-400">
-                            {branch.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}
+                            {(branch.cnpj || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}
                           </div>
                         </div>
                       ) : (
                         <span className="text-slate-400">
-                          {[vac.city || currentCompany.cidade, vac.state || currentCompany.estado]
+                          {[vac.city || currentCompany?.cidade, vac.state || currentCompany?.estado]
                             .filter(Boolean)
                             .join('/') || 'Matriz'}
                         </span>
@@ -342,21 +517,67 @@ export const VacanciesModule: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-3 text-center">
-                      <span
-                        className={`text-xs font-semibold ${
+                      <select
+                        aria-label={`Situação da vaga ${vac.title}`}
+                        value={vac.status}
+                        onChange={async (e) => {
+                          try {
+                            await updateVacancy(vac.id, {
+                              status: e.target.value as VacancyStatus,
+                            });
+                          } catch (err) {
+                            setFeedback({
+                              type: 'error',
+                              text: err instanceof Error ? err.message : 'Erro ao atualizar status.',
+                            });
+                          }
+                        }}
+                        className={`rounded-md border px-2 py-1 text-xs font-semibold outline-none ${
                           vac.status === 'open'
-                            ? 'text-emerald-700'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                             : vac.status === 'paused'
-                            ? 'text-[#9F8548]'
-                            : 'text-slate-500'
+                            ? 'bg-amber-50 border-amber-200 text-[#9F8548]'
+                            : 'bg-slate-100 border-slate-200 text-slate-600'
                         }`}
                       >
-                        {vac.status === 'open' ? 'Aberta' : vac.status === 'paused' ? 'Pausada' : 'Fechada'}
-                      </span>
+                        <option value="open">Aberta</option>
+                        <option value="paused">Pausada</option>
+                        <option value="closed">Fechada</option>
+                      </select>
                     </td>
 
                     <td className="py-3 px-3 text-right text-slate-500 font-mono tabular-nums">
                       {new Date(vac.created_at).toLocaleDateString('pt-BR')}
+                    </td>
+
+                    <td className="py-3 px-3 text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => openEditVacancy(vac)}
+                          title="Editar vaga"
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#082175] hover:bg-slate-50"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Excluir a vaga "${vac.title}"?`)) return;
+                            try {
+                              await deleteVacancy(vac.id);
+                              setFeedback({ type: 'success', text: `Vaga "${vac.title}" removida.` });
+                            } catch (err) {
+                              setFeedback({
+                                type: 'error',
+                                text: err instanceof Error ? err.message : 'Erro ao excluir vaga.',
+                              });
+                            }
+                          }}
+                          title="Excluir vaga"
+                          className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -364,18 +585,22 @@ export const VacanciesModule: React.FC = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
-      {/* New Vacancy Modal */}
+      {/* New / Edit Vacancy Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-[#082175]">
-                Publicar Nova Vaga
+                {editingVacancy ? 'Editar Vaga' : 'Publicar Nova Vaga'}
               </h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetVacancyForm();
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
@@ -383,68 +608,85 @@ export const VacanciesModule: React.FC = () => {
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (!newTitle) return;
-                let resolvedJobId = newJobId;
-                if (!resolvedJobId) {
-                  const createdJob = addNewJob({
-                    title: newTitle.trim(),
-                    department: customDepartment.trim() || 'Operações',
-                    base_salary: Number(customSalary) || 3500,
-                  });
-                  resolvedJobId = createdJob.id;
-                }
-
-                let resolvedBranchId: string | null = newBranchId || null;
-                let resolvedCity = currentCompany.cidade;
-                let resolvedState = currentCompany.estado;
-
-                if (showInlineBranchForm && newBranchLabel.trim()) {
-                  const createdBranch = addCompanyBranch(currentTenantId, {
-                    label: newBranchLabel.trim(),
-                    cnpj: newBranchCnpj.trim() || currentCompany.cnpj,
-                    endereco: newBranchEndereco.trim() || undefined,
-                    cidade: newBranchCidade.trim() || currentCompany.cidade,
-                    estado: newBranchEstado.trim() || currentCompany.estado,
-                    is_headquarters: false,
-                  });
-                  resolvedBranchId = createdBranch.id;
-                  resolvedCity = createdBranch.cidade;
-                  resolvedState = createdBranch.estado;
-                } else if (resolvedBranchId) {
-                  const selectedBranch = branches.find((b) => b.id === resolvedBranchId);
-                  if (selectedBranch) {
-                    resolvedCity = selectedBranch.cidade || resolvedCity;
-                    resolvedState = selectedBranch.estado || resolvedState;
+                if (!newTitle.trim()) return;
+                setSavingVacancy(true);
+                try {
+                  let resolvedJobId = newJobId;
+                  if (!resolvedJobId) {
+                    const createdJob = await addNewJob({
+                      title: newTitle.trim(),
+                      department: customDepartment.trim() || 'Operações',
+                      base_salary: Number(customSalary) || 3500,
+                    });
+                    resolvedJobId = createdJob.id;
                   }
+
+                  let resolvedBranchId: string | null = newBranchId || null;
+                  let resolvedCity = currentCompany?.cidade;
+                  let resolvedState = currentCompany?.estado;
+
+                  if (showInlineBranchForm && newBranchLabel.trim()) {
+                    const createdBranch = await addCompanyBranch(currentTenantId, {
+                      label: newBranchLabel.trim(),
+                      cnpj: newBranchCnpj.trim() || currentCompany?.cnpj || '',
+                      endereco: newBranchEndereco.trim() || undefined,
+                      cidade: newBranchCidade.trim() || currentCompany?.cidade,
+                      estado: newBranchEstado.trim() || currentCompany?.estado,
+                      is_headquarters: false,
+                    });
+                    resolvedBranchId = createdBranch.id;
+                    resolvedCity = createdBranch.cidade;
+                    resolvedState = createdBranch.estado;
+                  } else if (resolvedBranchId) {
+                    const selectedBranch = branches.find((b) => b.id === resolvedBranchId);
+                    if (selectedBranch) {
+                      resolvedCity = selectedBranch.cidade || resolvedCity;
+                      resolvedState = selectedBranch.estado || resolvedState;
+                    }
+                  }
+
+                  if (editingVacancy) {
+                    await updateVacancy(editingVacancy.id, {
+                      job_id: resolvedJobId,
+                      branch_id: resolvedBranchId,
+                      title: newTitle.trim(),
+                      description: newDescription.trim(),
+                      vacancies_count: Number(newVacanciesCount) || 1,
+                      city: resolvedCity,
+                      state: resolvedState,
+                      api_source: newApiSource,
+                      status: newStatus,
+                    });
+                    setFeedback({ type: 'success', text: `Vaga "${newTitle.trim()}" atualizada.` });
+                  } else {
+                    await addNewVacancy({
+                      job_id: resolvedJobId,
+                      branch_id: resolvedBranchId,
+                      title: newTitle.trim(),
+                      description: newDescription.trim(),
+                      vacancies_count: Number(newVacanciesCount) || 1,
+                      city: resolvedCity,
+                      state: resolvedState,
+                      show_salary: true,
+                      api_source: newApiSource,
+                      api_external_id: `ext-${newApiSource}-${Date.now().toString(36)}`,
+                      status: newStatus,
+                    });
+                    setFeedback({ type: 'success', text: `Vaga "${newTitle.trim()}" publicada com sucesso.` });
+                  }
+
+                  setShowAddModal(false);
+                  resetVacancyForm();
+                } catch (err) {
+                  setFeedback({
+                    type: 'error',
+                    text: err instanceof Error ? err.message : 'Erro ao salvar vaga.',
+                  });
+                } finally {
+                  setSavingVacancy(false);
                 }
-
-                addNewVacancy({
-                  job_id: resolvedJobId,
-                  branch_id: resolvedBranchId,
-                  title: newTitle,
-                  description: newDescription,
-                  vacancies_count: Number(newVacanciesCount) || 1,
-                  city: resolvedCity,
-                  state: resolvedState,
-                  show_salary: true,
-                  api_source: newApiSource,
-                  api_external_id: `ext-${newApiSource}-${Date.now().toString(36)}`,
-                  status: newStatus,
-                });
-
-                setShowAddModal(false);
-                setNewTitle('');
-                setNewDescription('');
-                setCustomDepartment('');
-                setCustomSalary('');
-                setNewBranchLabel('');
-                setNewBranchCnpj('');
-                setNewBranchEndereco('');
-                setNewBranchCidade('');
-                setShowInlineBranchForm(false);
-                setNewVacanciesCount(1);
               }}
               className="space-y-3 text-xs max-h-[75vh] overflow-y-auto pr-1"
             >
@@ -486,7 +728,7 @@ export const VacanciesModule: React.FC = () => {
                     <option value="">Sede / Matriz padrão</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.label} ({b.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')})
+                        {b.label} ({(b.cnpj || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')})
                       </option>
                     ))}
                   </select>
@@ -632,16 +874,135 @@ export const VacanciesModule: React.FC = () => {
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    resetVacancyForm();
+                  }}
                   className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#082175] hover:bg-[#0a2a8a] text-white rounded-lg font-semibold shadow-xs"
+                  disabled={savingVacancy}
+                  className="px-4 py-2 bg-[#082175] hover:bg-[#0a2a8a] text-white rounded-lg font-semibold shadow-xs disabled:opacity-60 flex items-center gap-1.5"
                 >
-                  Publicar Vaga
+                  {savingVacancy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {savingVacancy
+                      ? 'Salvando...'
+                      : editingVacancy
+                      ? 'Salvar Alterações'
+                      : 'Publicar Vaga'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* New / Edit Job Modal */}
+      {showJobModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-[#082175]">
+                {editingJob ? 'Editar Cargo' : 'Cadastrar Novo Cargo'}
+              </h3>
+              <button onClick={() => setShowJobModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!jobTitleInput.trim()) return;
+                setSavingJob(true);
+                try {
+                  if (editingJob) {
+                    await updateJob(editingJob.id, {
+                      title: jobTitleInput.trim(),
+                      department: jobDeptInput.trim() || 'Operações',
+                      base_salary: Number(jobSalaryInput) || 2500,
+                    });
+                    setFeedback({ type: 'success', text: `Cargo "${jobTitleInput.trim()}" atualizado.` });
+                  } else {
+                    await addNewJob({
+                      title: jobTitleInput.trim(),
+                      department: jobDeptInput.trim() || 'Operações',
+                      base_salary: Number(jobSalaryInput) || 2500,
+                    });
+                    setFeedback({ type: 'success', text: `Cargo "${jobTitleInput.trim()}" criado.` });
+                  }
+                  setShowJobModal(false);
+                } catch (err) {
+                  setFeedback({
+                    type: 'error',
+                    text: err instanceof Error ? err.message : 'Erro ao salvar cargo.',
+                  });
+                } finally {
+                  setSavingJob(false);
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block text-[#03416A] font-semibold mb-1">Nome do Cargo *</label>
+                <input
+                  type="text"
+                  required
+                  value={jobTitleInput}
+                  onChange={(e) => setJobTitleInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#082175]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#03416A] font-semibold mb-1">Departamento *</label>
+                  <input
+                    type="text"
+                    required
+                    value={jobDeptInput}
+                    onChange={(e) => setJobDeptInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#082175]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#03416A] font-semibold mb-1">Salário Base (R$) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={jobSalaryInput}
+                    onChange={(e) => setJobSalaryInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#082175]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#03416A] font-semibold mb-1">Descrição</label>
+                <textarea
+                  rows={2}
+                  value={jobDescInput}
+                  onChange={(e) => setJobDescInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#082175] resize-none"
+                />
+              </div>
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowJobModal(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingJob}
+                  className="px-4 py-2 bg-[#082175] text-white rounded-lg font-semibold"
+                >
+                  {savingJob ? 'Salvando...' : 'Salvar Cargo'}
                 </button>
               </div>
             </form>

@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
+import {
+  BLOG_POSTS,
+  BlogArticle,
+  CASE_IMAGE,
+  CCB_LOGO_URL,
+  HERO_IMAGE,
+  PARTNER_CRISTINA_IMAGE,
+  PARTNER_DEUSA_IMAGE,
+} from './landing/landingContent';
+import { QuickApplyModal } from './landing/QuickApplyModal';
+import { BlogArticleModal } from './landing/BlogArticleModal';
 import {
   ArrowRight,
   Briefcase,
   Building2,
   CheckCircle2,
   ClipboardCheck,
-  FileCheck,
   FileText,
   GraduationCap,
-  Link2,
   Lock,
   Mail,
   MapPin,
@@ -19,7 +28,6 @@ import {
   Quote,
   Search,
   Sparkles,
-  Upload,
   UserCheck,
   UserPlus,
   Users,
@@ -38,63 +46,6 @@ interface LandingPageProps {
   onGoToSaas: () => void;
 }
 
-const CCB_LOGO_URL =
-  'https://media.base44.com/images/public/6a52c7e1c55bcfd0507f8b31/8c104df66_CCB_Apresentacao3.png';
-
-const HERO_IMAGE = '/src/assets/images/hero_ccb_team_1794748843429.jpg';
-const CASE_IMAGE = '/src/assets/images/case_emporio_retail_1794748843298.jpg';
-const PARTNER_CRISTINA_IMAGE = '/src/assets/images/partner_cristina_1794748843281.jpg';
-const PARTNER_DEUSA_IMAGE = '/src/assets/images/partner_deusa_1794748844320.jpg';
-const BLOG_STRATEGY_IMAGE = '/src/assets/images/blog_hr_strategy_1794748845057.jpg';
-
-interface BlogArticle {
-  title: string;
-  preview: string;
-  img: string;
-  readTime: string;
-  date: string;
-  content: string[];
-}
-
-const BLOG_POSTS: BlogArticle[] = [
-  {
-    title: 'Gestão de pessoas',
-    preview: 'Estratégias para reter talentos e construir equipes engajadas em 2026.',
-    img: BLOG_STRATEGY_IMAGE,
-    readTime: '4 min de leitura',
-    date: 'Março 2026',
-    content: [
-      'Reter profissionais qualificados exige mais do que pacotes salariais competitivos. Empresas que constroem ambientes de confiança e clareza de propósito reduzem drasticamente o turnover nos primeiros 12 meses de contratação.',
-      'Na metodologia Fazer Parte da ccbrh, o alinhamento cultural começa antes mesmo da entrevista técnica: mapeamos a rotina real da equipe, o estilo de liderança e as metas da operação para conectar pessoas que desejam permanecer e crescer na empresa.',
-      'Acompanhar indicadores de quadro de colaboradores, distribuição salarial e feedbacks estruturados permite agir preventivamente antes que a perda de talentos impacte os resultados do negócio.',
-    ],
-  },
-  {
-    title: 'Legislação trabalhista',
-    preview: 'Principais mudanças que toda empresa precisa saber para ficar em dia.',
-    img: HERO_IMAGE,
-    readTime: '5 min de leitura',
-    date: 'Fevereiro 2026',
-    content: [
-      'Manter o Departamento Pessoal em conformidade evita passivos trabalhistas, autuações e custos imprevistos que comprometem a previsibilidade financeira da organização.',
-      'A padronização do dossiê admissional — com conferência rigorosa de RG, CPF, comprovante de residência e registros contratuais dentro do prazo — é o primeiro pilar para uma folha de pagamento segura e auditável.',
-      'Com o apoio consultivo e operacional da ccbrh, sua empresa estrutura rotinas de admissão, controle de férias e folha com respaldo jurídico e agilidade digital.',
-    ],
-  },
-  {
-    title: 'Recrutamento',
-    preview: 'Como atrair e selecionar os melhores profissionais para sua empresa.',
-    img: CASE_IMAGE,
-    readTime: '4 min de leitura',
-    date: 'Janeiro 2026',
-    content: [
-      'Contratar não é apenas preencher uma vaga em aberto: é encontrar quem a empresa gostaria de ter na equipe no longo prazo.',
-      'Estruturar o funil de seleção em etapas claras — triagem aderente à cultura, entrevista comportamental, proposta transparente e coleta digital de documentos — reduz o tempo de fechamento de vagas e eleva a qualidade das contratações.',
-      'No caso do Empório Varanda, a combinação entre entendimento profundo da operação e metodologia estruturada permitiu preencher 100 posições para duas novas unidades com excelência e rapidez.',
-    ],
-  },
-];
-
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenLogin,
   onOpenCandidatePortal,
@@ -104,7 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   isAuthenticated,
   onGoToSaas,
 }) => {
-  const { database, applyFromLanding } = useHireGrid();
+  const { database, applyFromLanding, submitContactLead } = useCcb();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -114,14 +65,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Application / Talent Bank modal state
   const [applyingVacancy, setApplyingVacancy] = useState<Vacancy | null>(null);
   const [talentModalOpen, setTalentModalOpen] = useState(false);
-  const [candName, setCandName] = useState('');
-  const [candEmail, setCandEmail] = useState('');
-  const [candPhone, setCandPhone] = useState('');
-  const [candLinkedin, setCandLinkedin] = useState('');
-  const [candResumeName, setCandResumeName] = useState('');
   const [selectedVacancyId, setSelectedVacancyId] = useState('');
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [candError, setCandError] = useState<string | null>(null);
 
   // Blog article modal state
   const [selectedArticle, setSelectedArticle] = useState<BlogArticle | null>(null);
@@ -157,76 +101,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const handleOpenVacancyApply = (vac: Vacancy) => {
     setApplyingVacancy(vac);
     setSelectedVacancyId(vac.id);
-    setCandLinkedin('');
-    setCandResumeName('');
-    setCreatedToken(null);
-    setCandError(null);
     setTalentModalOpen(true);
   };
 
   const handleOpenTalentBank = () => {
     setApplyingVacancy(null);
     setSelectedVacancyId(openVacancies[0]?.id || database.vacancies[0]?.id || '');
-    setCandLinkedin('');
-    setCandResumeName('');
-    setCreatedToken(null);
-    setCandError(null);
     setTalentModalOpen(true);
-  };
-
-  const handleResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCandResumeName(file.name);
-    setCandError(null);
-  };
-
-  const handleSubmitCandidate = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCandError(null);
-
-    if (!candName.trim() || !candEmail.trim() || !candPhone.trim()) {
-      setCandError('Preencha nome completo, e-mail e telefone para concluir o cadastro.');
-      return;
-    }
-
-    if (!candResumeName.trim()) {
-      setCandError('Anexe seu currículo (PDF, DOC ou DOCX) para concluir a candidatura.');
-      return;
-    }
-
-    const targetVac =
-      database.vacancies.find((v) => v.id === selectedVacancyId) ||
-      openVacancies[0] ||
-      database.vacancies[0];
-
-    if (!targetVac) {
-      setCandError('Nenhuma vaga disponível para vínculo no momento.');
-      return;
-    }
-
-    const normalizedLinkedin = candLinkedin.trim()
-      ? candLinkedin.trim().startsWith('http')
-        ? candLinkedin.trim()
-        : `https://${candLinkedin.trim()}`
-      : '';
-
-    const newCandidate = applyFromLanding(
-      targetVac.id,
-      targetVac.tenant_id,
-      candName.trim(),
-      candEmail.trim(),
-      candPhone.trim(),
-      candResumeName.trim(),
-      normalizedLinkedin || undefined
-    );
-
-    setCreatedToken(newCandidate.document_token);
-    setCandName('');
-    setCandEmail('');
-    setCandPhone('');
-    setCandLinkedin('');
-    setCandResumeName('');
   };
 
   const handleContactSubmit = async (e: React.FormEvent) => {
@@ -252,38 +133,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
     setContactLoading(true);
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: contactName,
-          company: contactCompany,
-          email: contactEmail,
-          phone: contactPhone,
-          message: contactMessage,
-        }),
+      await submitContactLead({
+        name: contactName.trim(),
+        company: contactCompany.trim() || null,
+        email: contactEmail.trim(),
+        phone: contactPhone.trim() || null,
+        message: contactMessage.trim(),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setContactFeedback({
-          type: 'error',
-          text: data.error || 'Não foi possível enviar a mensagem.',
-        });
-      } else {
-        setContactFeedback({
-          type: 'success',
-          text: data.summary || 'Mensagem recebida! Nossa equipe responderá em breve.',
-        });
-        setContactName('');
-        setContactCompany('');
-        setContactEmail('');
-        setContactPhone('');
-        setContactMessage('');
-      }
-    } catch {
+      setContactFeedback({
+        type: 'success',
+        text: 'Mensagem recebida e registrada com sucesso! Nossa equipe responderá em breve.',
+      });
+      setContactName('');
+      setContactCompany('');
+      setContactEmail('');
+      setContactPhone('');
+      setContactMessage('');
+    } catch (err) {
       setContactFeedback({
         type: 'error',
-        text: 'Erro ao conectar com o servidor. Tente novamente.',
+        text:
+          err instanceof Error
+            ? err.message
+            : 'Erro ao registrar contato no servidor. Tente novamente.',
       });
     } finally {
       setContactLoading(false);
@@ -787,13 +659,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   pessoa na sua equipe, contrate."
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={isAuthenticated ? onGoToSaas : onOpenLogin}
-                className="px-6 py-3 rounded-full bg-white text-[#082175] text-sm font-semibold hover:bg-[#E0F4F7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Conhecer o SaaS
-              </button>
             </div>
           </div>
         </section>
@@ -1338,257 +1203,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </footer>
 
-      {/* MODAL: CANDIDATURA / BANCO DE TALENTOS */}
-      {talentModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <p className="text-xs font-semibold text-[#9F8548] uppercase">
-                  {applyingVacancy ? 'Candidatura Direta' : 'Banco de Talentos CCB'}
-                </p>
-                <h3 className="text-lg font-bold text-[#03416A] mt-0.5">
-                  {applyingVacancy ? applyingVacancy.title : 'Cadastrar meu currículo'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTalentModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <QuickApplyModal
+        isOpen={talentModalOpen}
+        applyingVacancy={applyingVacancy}
+        openVacancies={openVacancies}
+        allVacancies={database.vacancies}
+        initialVacancyId={selectedVacancyId}
+        onClose={() => setTalentModalOpen(false)}
+        onApply={applyFromLanding}
+        onOpenCandidatePortal={onOpenCandidatePortal}
+      />
 
-            {createdToken ? (
-              <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-900">
-                  <div className="flex items-center gap-2 font-bold mb-1">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span>Cadastro realizado com sucesso!</span>
-                  </div>
-                  <p className="text-xs leading-relaxed text-emerald-800">
-                    Seu currículo foi recebido e seu perfil já está no funil de seleção da empresa.
-                    Caso queira enviar os demais documentos admissionais agora, acesse o link
-                    exclusivo abaixo:
-                  </p>
-                  <p className="mt-2 font-mono text-[11px] bg-white px-2.5 py-1.5 rounded border border-emerald-200 break-all">
-                    {createdToken}
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTalentModalOpen(false);
-                      onOpenCandidatePortal(createdToken);
-                    }}
-                    className="flex-1 py-2.5 px-4 rounded-full bg-[#082175] text-white text-xs font-semibold hover:bg-[#0a2a8a] transition-colors cursor-pointer"
-                  >
-                    Enviar Documentos Agora
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTalentModalOpen(false)}
-                    className="py-2.5 px-4 rounded-full border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-                  >
-                    Fechar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmitCandidate} className="space-y-3.5">
-                {!applyingVacancy && openVacancies.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                      Vaga de interesse
-                    </label>
-                    <select
-                      value={selectedVacancyId}
-                      onChange={(e) => setSelectedVacancyId(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
-                    >
-                      {openVacancies.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                    Nome completo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={candName}
-                    onChange={(e) => setCandName(e.target.value)}
-                    placeholder="Seu nome completo"
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                    E-mail *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={candEmail}
-                    onChange={(e) => setCandEmail(e.target.value)}
-                    placeholder="seuemail@exemplo.com.br"
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                    WhatsApp / Telefone *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={candPhone}
-                    onChange={(e) => setCandPhone(e.target.value)}
-                    placeholder="(11) 99999-0000"
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                    LinkedIn
-                  </label>
-                  <div className="relative">
-                    <Link2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={candLinkedin}
-                      onChange={(e) => setCandLinkedin(e.target.value)}
-                      placeholder="https://linkedin.com/in/seuperfil"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-[#082175]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#03416A] mb-1">
-                    Currículo (PDF, DOC ou DOCX) *
-                  </label>
-                  <label
-                    className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                      candResumeName
-                        ? 'border-emerald-300 bg-emerald-50/70 text-emerald-800'
-                        : 'border-dashed border-slate-300 bg-slate-50/60 hover:bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {candResumeName ? (
-                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <Upload className="w-4 h-4 text-[#082175] shrink-0" />
-                      )}
-                      <span className="text-xs font-medium truncate">
-                        {candResumeName ? candResumeName : 'Clique para anexar seu currículo *'}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-[#082175] shrink-0">
-                      {candResumeName ? 'Trocar' : 'Selecionar'}
-                    </span>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleResumeFileChange}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                {candError && (
-                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5 font-medium">
-                    {candError}
-                  </p>
-                )}
-
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTalentModalOpen(false)}
-                    className="px-4 py-2 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#082175] text-white text-xs font-semibold hover:bg-[#0a2a8a] transition-colors cursor-pointer"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span>Concluir Cadastro</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LEITURA DE ARTIGO DO BLOG */}
-      {selectedArticle && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-            <img
-              src={selectedArticle.img}
-              alt={selectedArticle.title}
-              className="w-full h-52 object-cover shrink-0"
-              referrerPolicy="no-referrer"
-            />
-            <div className="p-6 overflow-y-auto">
-              <div className="flex items-center justify-between gap-4 mb-2">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="font-semibold text-[#9F8548]">{selectedArticle.date}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{selectedArticle.readTime}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedArticle(null)}
-                  className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <h3 className="text-2xl font-bold text-[#03416A] mb-4">{selectedArticle.title}</h3>
-              <div className="space-y-3 text-sm text-slate-600 leading-relaxed">
-                {selectedArticle.content.map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <a
-                  href="#contato"
-                  onClick={() => setSelectedArticle(null)}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#082175] hover:text-[#9F8548]"
-                >
-                  <Briefcase className="w-4 h-4" />
-                  <span>Falar com uma especialista CCB</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setSelectedArticle(null)}
-                  className="px-4 py-2 rounded-full bg-[#E0F4F7] text-[#03416A] text-xs font-semibold hover:bg-[#c8e8ed] cursor-pointer"
-                >
-                  Fechar artigo
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <BlogArticleModal
+        article={selectedArticle}
+        onClose={() => setSelectedArticle(null)}
+      />
     </div>
   );
 };

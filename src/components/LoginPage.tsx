@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHireGrid } from '../context/HireGridContext';
+import { useCcb } from '../context/CcbContext';
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,7 +28,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onOpenCandidatePortal,
   onOpenCompanyRegistration,
 }) => {
-  const { login } = useHireGrid();
+  const { login } = useCcb();
 
   const [logoError, setLogoError] = useState(false);
   const [email, setEmail] = useState('');
