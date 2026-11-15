@@ -1,0 +1,6 @@
+{
+  "name": "HireGrid AI - People Analytics & R&S Engine",
+  "description": "Motor oficial de Inteligência Artificial do HireGrid para People Analytics B2B, gestão de recrutamento multi-tenant e onboarding sobre Supabase/PostgreSQL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
