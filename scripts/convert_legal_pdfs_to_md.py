@@ -262,13 +262,13 @@ def infer_law_metadata_from_text(stem: str, raw_text: str) -> dict[str, Any]:
     }
 
 
-def extract_key_articles(markdown_body: str, max_articles: int = 1200) -> list[dict[str, str]]:
+def extract_key_articles(markdown_body: str, max_articles: int = 2500) -> list[dict[str, str]]:
     """
-    Extrai TODOS os artigos (Art. X) ou itens normativos (NR / Portarias) vigentes da base legal,
+    Extrai TODOS os artigos (Art. X ou Art. 1.049) ou itens normativos (NR / Portarias) vigentes da base legal,
     permitindo que qualquer artigo de qualquer lei adicionada no futuro seja encontrado na busca.
     """
     pattern = re.compile(
-        r"###\s+(Art\.\s*\d+[º°o\-A-Za-z]*\.?)\s*(.*?)(?=\n###\s+Art\.|\n#\s+|\n##\s+|\Z)",
+        r"###\s+(Art\.\s*[\d\.]+[º°o\-A-Za-z]*\.?)\s*(.*?)(?=\n###\s+Art\.|\n#\s+|\n##\s+|\Z)",
         re.DOTALL,
     )
     matches = pattern.findall(markdown_body)

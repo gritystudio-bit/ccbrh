@@ -162,6 +162,9 @@ export const LegalConsultationModule: React.FC = () => {
   }, [catalog, selectedLawCode]);
 
   const matchingArticles = useMemo(() => {
+    const normalizeDigits = (val: string) =>
+      val.toLowerCase().replace(/(\d)\.(\d{3})\b/g, '$1$2');
+
     const q = searchQuery.trim().toLowerCase();
     const tokens = q
       .split(/\s+ou\s+|,|;/i)
@@ -177,15 +180,21 @@ export const LegalConsultationModule: React.FC = () => {
 
     for (const law of activeLaws) {
       for (const art of law.key_articles) {
+        const artLabelNorm = normalizeDigits(art.article);
+        const artContentNorm = normalizeDigits(art.content);
         const matchesQuery =
           tokens.length === 0 ||
-          tokens.some(
-            (tok) =>
+          tokens.some((tok) => {
+            const tokNorm = normalizeDigits(tok);
+            return (
               art.article.toLowerCase().includes(tok) ||
+              artLabelNorm.includes(tokNorm) ||
               art.content.toLowerCase().includes(tok) ||
+              artContentNorm.includes(tokNorm) ||
               law.title.toLowerCase().includes(tok) ||
               law.tags.some((t) => t.toLowerCase().includes(tok))
-          );
+            );
+          });
         if (matchesQuery) {
           results.push({
             lawCode: law.code,
