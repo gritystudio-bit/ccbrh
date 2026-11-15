@@ -160,8 +160,113 @@ def clean_extracted_text(raw_text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 
-def extract_key_articles(markdown_body: str, max_articles: int = 120) -> list[dict[str, str]]:
-    """Extrai artigos estruturados (Art. X) para busca instantânea na interface."""
+def infer_law_metadata_from_text(stem: str, raw_text: str) -> dict[str, Any]:
+    """
+    Infere automaticamente metadados (código, título, número da norma, ano, categoria, tags e ementa)
+    a partir do cabeçalho de qualquer PDF legislativo ou normativo brasileiro (Leis, Decretos, Portarias,
+    Instruções Normativas RFB, Normas Regulamentadoras - NRs, Convenções Coletivas - CCT, etc.).
+    """
+    head = re.sub(r"\s+", " ", raw_text[:6000]).strip()
+
+    # 1. Detecta o tipo e número oficial do ato normativo
+    act_patterns = [
+        (r"(LEI\s+COMPLEMENTAR\s+N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "LC"),
+        (r"(LEI\s+N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "LEI"),
+        (r"(DECRETO-LEI\s+N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "DEL"),
+        (r"(DECRETO\s+N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "DEC"),
+        (r"(MEDIDA\s+PROVISÓRIA\s+N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "MP"),
+        (r"(INSTRUÇÃO\s+NORMATIVA\s+(?:RFB\s+)?N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "IN"),
+        (r"(PORTARIA\s+(?:MTE\s+|MTP\s+|ME\s+)?N[º°o]?\s*[\d\.]+(?:\s*,\s*DE\s*[^,\n]+?\d{4})?)", "PORT"),
+        (r"(NORMA\s+REGULAMENTADORA\s+N[º°o]?\s*\d+|NR\s*-\s*\d+)", "NR"),
+    ]
+
+    law_number = stem.replace("_", " ").upper()
+    code_prefix = "NORMA"
+    effective_year = 2026
+
+    for regex, prefix in act_patterns:
+        m = re.search(regex, head, re.IGNORECASE)
+        if m:
+            raw_act = re.sub(r"\s+", " ", m.group(1)).strip()
+            year_match = re.search(r"\b(19\d{2}|20\d{2})\b", raw_act)
+            num_match = re.search(r"N[º°o]?\s*([\d\.]+)", raw_act, re.IGNORECASE)
+            if year_match:
+                effective_year = int(year_match.group(1))
+            if num_match:
+                num_clean = num_match.group(1)
+                law_number = f"{raw_act.split(',')[0].title()}/{effective_year}"
+                code_prefix = f"{prefix}-{num_clean.replace('.', '')}"
+            else:
+                law_number = raw_act.title()
+                code_prefix = f"{prefix}-{stem.upper()[:10]}"
+            break
+
+    # 2. Extrai a ementa oficial (ex: "Dispõe sobre...", "Altera...", "Regulamenta...", "Institui...")
+    ementa_match = re.search(
+        r"((?:Dispõe sobre|Altera|Regulamenta|Institui|Aprova|Estabelece|Consolida)[^\.]{20,380}\.)",
+        head,
+        re.IGNORECASE,
+    )
+    summary = (
+        ementa_match.group(1).strip()
+        if ementa_match
+        else f"Norma jurídica ({law_number}) convertida e indexada integralmente a partir de {stem}.pdf."
+    )
+
+    # 3. Extrai palavras-chave / tags automaticamente do texto
+    keyword_candidates = [
+        ("Férias", r"\bférias\b"),
+        ("13º Salário", r"\bdécimo\s+terceiro|gratificação\s+natalina\b"),
+        ("IRRF", r"\bimposto\s+sobre\s+a\s+renda|irrf\b"),
+        ("INSS / Previdência", r"\bprevidência|contribuição\s+previdenciária|inss\b"),
+        ("FGTS", r"\bfundo\s+de\s+garantia|fgts\b"),
+        ("Jornada de Trabalho", r"\bjornada|horas?\s+extras?|banco\s+de\s+horas\b"),
+        ("Adicional Noturno", r"\badicional\s+noturno|trabalho\s+noturno\b"),
+        ("Insalubridade", r"\binsalubridade|insalubre\b"),
+        ("Periculosidade", r"\bpericulosidade|perigoso\b"),
+        ("Rescisão Contratual", r"\brescisão|aviso\s+prévio\b"),
+        ("Licença-Maternidade", r"\blicença-maternidade|salário-maternidade|gestante\b"),
+        ("Afastamentos / Licenças", r"\bafastamento|auxílio-doença|incapacidade\s+temporária\b"),
+        ("Saúde e Segurança (SST)", r"\bsegurança\s+e\s+medicina|acidente\s+de\s+trabalho|epi\b"),
+        ("Teletrabalho / Home Office", r"\bteletrabalho|remoto\b"),
+        ("Retenções PJ / CSRF", r"\bretenção\s+na\s+fonte|pessoa\s+jurídica|pis/pasep|cofins|csll\b"),
+        ("eSocial", r"\besocial\b"),
+    ]
+    detected_tags: list[str] = [law_number]
+    sample_body = raw_text[:80000]
+    for label, kw_regex in keyword_candidates:
+        if re.search(kw_regex, sample_body, re.IGNORECASE):
+            detected_tags.append(label)
+        if len(detected_tags) >= 10:
+            break
+
+    # 4. Define categoria e título amigável
+    if any(t in detected_tags for t in ("IRRF", "Retenções PJ / CSRF")):
+        category = "Legislação Tributária & Retenções"
+    elif "Saúde e Segurança (SST)" in detected_tags:
+        category = "Saúde e Segurança do Trabalho (SST / NR)"
+    else:
+        category = "Legislação Trabalhista & Previdenciária"
+
+    short_summary = summary[:95].rstrip(" .,;") + ("..." if len(summary) > 95 else "")
+    title = f"{law_number} — {short_summary}"
+
+    return {
+        "code": code_prefix,
+        "title": title,
+        "law_number": law_number,
+        "category": category,
+        "effective_year": effective_year,
+        "summary": summary,
+        "tags": detected_tags,
+    }
+
+
+def extract_key_articles(markdown_body: str, max_articles: int = 1200) -> list[dict[str, str]]:
+    """
+    Extrai TODOS os artigos (Art. X) ou itens normativos (NR / Portarias) vigentes da base legal,
+    permitindo que qualquer artigo de qualquer lei adicionada no futuro seja encontrado na busca.
+    """
     pattern = re.compile(
         r"###\s+(Art\.\s*\d+[º°o\-A-Za-z]*\.?)\s*(.*?)(?=\n###\s+Art\.|\n#\s+|\n##\s+|\Z)",
         re.DOTALL,
@@ -170,44 +275,45 @@ def extract_key_articles(markdown_body: str, max_articles: int = 120) -> list[di
     articles: list[dict[str, str]] = []
     seen_numbers: set[str] = set()
 
-    # Artigos essenciais da CLT, Reforma Trabalhista e RIR/2018 (exact number match)
-    priority_numbers = {
-        "1", "2", "3", "7", "29", "41", "58", "58-A", "59", "59-A", "59-B",
-        "61", "62", "66", "71", "73", "75", "75-A", "75-B", "75-C",
-        "129", "130", "130-A", "134", "135", "137", "142", "143", "145",
-        "189", "190", "191", "192", "193", "194", "195",
-        "392", "442", "442-B", "443", "457", "458", "461", "462", "468",
-        "473", "477", "482", "483", "484", "484-A", "487",
-    }
-
-    prioritised: list[tuple[str, str]] = []
-    others: list[tuple[str, str]] = []
     for art_num, content in matches:
         clean_num = re.sub(r"\s+", " ", art_num).strip()
         clean_text = re.sub(r"\s+", " ", content).strip()
         if not clean_text or len(clean_text) < 15:
             continue
-        if "(Revogado" in clean_text[:60] or "(revogado" in clean_text[:60]:
+        if "(Revogado" in clean_text[:60] or "(revogado" in clean_text[:60] or "(Vetado" in clean_text[:60]:
             continue
-        num_match = re.search(r"Art\.\s*(\d+(?:-[A-Za-z]+)?)", clean_num)
-        num_token = num_match.group(1) if num_match else ""
-        if num_token in priority_numbers:
-            prioritised.append((clean_num, clean_text))
-        else:
-            others.append((clean_num, clean_text))
 
-    for clean_num, clean_text in (prioritised + others):
-        if clean_num in seen_numbers:
+        # Caso uma lei alteradora (ex: Reforma Trabalhista) tenha dois "Art. 1º" (o da própria lei e o da CLT alterada),
+        # preserva ambos anexando um sufixo discreto se houver colisão de rótulo com texto diferente.
+        key_label = clean_num
+        if key_label in seen_numbers:
             continue
-        seen_numbers.add(clean_num)
+        seen_numbers.add(key_label)
         articles.append(
             {
                 "article": clean_num,
-                "content": clean_text[:1400],
+                "content": clean_text[:900],
             }
         )
         if len(articles) >= max_articles:
             break
+
+    # Fallback para normas que não usam "Art. X" (ex: Normas Regulamentadoras NR com itens 1.1, 1.2, Súmulas, CCTs)
+    if not articles:
+        paragraphs = [
+            re.sub(r"\s+", " ", p).strip()
+            for p in markdown_body.split("\n\n")
+            if len(p.strip()) >= 40 and not p.strip().startswith("---")
+        ]
+        for idx, para in enumerate(paragraphs[:200], start=1):
+            item_match = re.match(r"^(\d+(?:\.\d+)+|Cláusula\s+\d+[ªº]?|Súmula\s+n?[º°]?\s*\d+)", para, re.IGNORECASE)
+            label = item_match.group(1) if item_match else f"Seção {idx}"
+            articles.append(
+                {
+                    "article": label,
+                    "content": para[:900],
+                }
+            )
 
     return articles
 
@@ -231,19 +337,6 @@ def build_frontmatter(meta: dict[str, Any], articles_count: int, pages_count: in
 
 def convert_pdf_file(pdf_path: Path) -> dict[str, Any]:
     stem = pdf_path.stem
-    meta = KNOWN_LAWS_METADATA.get(
-        stem,
-        {
-            "code": stem.upper(),
-            "title": f"Base Legal {stem}",
-            "law_number": stem,
-            "category": "Legislação Trabalhista",
-            "effective_year": 2026,
-            "summary": f"Documento normativo convertido automaticamente a partir de {pdf_path.name}.",
-            "tags": ["Legislação", stem],
-        },
-    )
-
     reader = PdfReader(str(pdf_path))
     pages_count = len(reader.pages)
     page_texts: list[str] = []
@@ -254,6 +347,7 @@ def convert_pdf_file(pdf_path: Path) -> dict[str, Any]:
             continue
 
     raw_text = "\n\n".join(page_texts)
+    meta = KNOWN_LAWS_METADATA.get(stem) or infer_law_metadata_from_text(stem, raw_text)
     cleaned_md_body = clean_extracted_text(raw_text)
     all_articles = re.findall(r"###\s+Art\.\s*\d+", cleaned_md_body)
     articles_count = max(len(all_articles), 1)
@@ -271,7 +365,7 @@ def convert_pdf_file(pdf_path: Path) -> dict[str, Any]:
     md_out_path = MARKDOWN_OUT_DIR / md_filename
     md_out_path.write_text(full_markdown, encoding="utf-8")
 
-    key_articles = extract_key_articles(cleaned_md_body, max_articles=120)
+    key_articles = extract_key_articles(cleaned_md_body)
 
     return {
         "code": meta["code"],
