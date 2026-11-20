@@ -2,6 +2,11 @@ import React from 'react';
 import { Calendar, CheckCircle2, Printer, X } from 'lucide-react';
 import { Company, Employee, Job, PayrollEntry } from '../../types/database';
 import { printIsolatedPayslip } from '../../utils/payrollExport';
+import {
+  decomposePayrollEntryToS1200Items,
+  deriveCbo,
+  deriveMatricula,
+} from '../../utils/esocial/esocialS13Engine';
 
 const formatBRL = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -30,60 +35,89 @@ export const PayslipPreviewModal: React.FC<PayslipPreviewModalProps> = ({
   if (!entry) return null;
 
   const isPj = (entry.contract_type || employee?.contract_type || 'clt') === 'pj';
+  const matricula = employee ? deriveMatricula(employee) : 'MAT-0001';
+  const cbo = deriveCbo(job);
+  const rubricas = !isPj
+    ? decomposePayrollEntryToS1200Items(entry, 'TABRUB01', { includeZeroIrrf: true })
+    : [];
+  const baseInss = Math.max(
+    0,
+    Number(entry.gross_salary || 0) -
+      Number(entry.vacation_abono_amount || 0) -
+      Number(entry.vacation_double_amount || 0) -
+      Number(entry.absence_discount_amount || 0)
+  );
+  const baseIrrf = Math.max(0, baseInss - Number(entry.inss_amount || 0));
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200 rounded-xl shadow-2xl w-full max-w-2xl p-6 space-y-5">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-5">
         <div className="flex items-start justify-between border-b border-slate-200 pb-4">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-wider text-[#9F8548]">
               {isPj
                 ? 'Autorização de Emissão de NFS-e · Contrato PJ'
-                : 'Demonstrativo de Pagamento · CLT'}
+                : 'Recibo de Pagamento de Salário · Padrão eSocial S-1.3 (S-1200 / S-1210)'}
             </p>
             <h3 className="text-lg font-bold text-[#082175] mt-0.5">
               {company?.name || 'Empresa Cliente'}
             </h3>
-            <p className="text-xs text-slate-500">CNPJ Tomador/Empregador: {company?.cnpj || '-'}</p>
+            <p className="text-xs text-slate-500">
+              CNPJ Empregador: {company?.cnpj || '-'}
+              {!isPj ? ` · Demonstrativo ideDmDev: DM-${entry.competence.replace('-', '')}-${matricula}` : ''}
+            </p>
           </div>
           <div className="text-right">
             <span className="text-xs font-mono font-bold bg-[#E0F4F7] text-[#03416A] px-2.5 py-1 rounded">
               Competência {entry.competence}
             </span>
             <p className="text-[11px] text-slate-500 mt-1">
-              Status Envio:{' '}
-              <strong>{entry.payslip_sent_status === 'sent' ? 'Enviado' : 'Pendente'}</strong>
+              {isPj ? 'Regime B2B (NFS-e)' : 'Categoria eSocial: 101 (Empregado CLT)'}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3.5 rounded-lg border border-slate-200">
           <div>
-            <span className="text-slate-500">{isPj ? 'Prestador:' : 'Colaborador:'}</span>{' '}
+            <span className="text-slate-500 block">{isPj ? 'Prestador:' : 'Trabalhador:'}</span>
             <strong className="text-slate-800">{employee?.full_name}</strong>
           </div>
           <div>
-            <span className="text-slate-500">{isPj ? 'CNPJ PJ:' : 'CPF:'}</span>{' '}
-            <strong className="text-slate-800">
-              {isPj ? employee?.pj_cnpj || '-' : employee?.cpf || '-'}
+            <span className="text-slate-500 block">{isPj ? 'CNPJ PJ:' : 'CPF / Matrícula eSocial:'}</span>
+            <strong className="text-slate-800 font-mono">
+              {isPj ? employee?.pj_cnpj || '-' : `${employee?.cpf || '-'} · ${matricula}`}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500">{isPj ? 'Razão Social PJ:' : 'Cargo:'}</span>{' '}
+            <span className="text-slate-500 block">{isPj ? 'Razão Social PJ:' : 'Cargo / CBO:'}</span>
             <strong className="text-slate-800">
-              {isPj ? employee?.pj_company_name || '-' : job?.title || '-'}
+              {isPj ? employee?.pj_company_name || '-' : `${job?.title || '-'} (CBO ${cbo})`}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500">
-              {isPj ? 'Início Contrato / NFS-e:' : 'Admissão / Dias:'}
-            </span>{' '}
+            <span className="text-slate-500 block">
+              {isPj ? 'Início Contrato / NFS-e:' : 'Admissão / Jornada:'}
+            </span>
             <strong className="text-slate-800">
               {isPj
                 ? `${formatDateBR(employee?.hire_date)} · Nº ${entry.nfse_number || 'Aguardando'}`
                 : `${formatDateBR(employee?.hire_date)} (${entry.worked_days} dias)`}
             </strong>
           </div>
+          {!isPj && (
+            <>
+              <div>
+                <span className="text-slate-500 block">Salário Base (vrSalFx):</span>
+                <strong className="text-slate-800 font-mono">
+                  {formatBRL(Number(entry.base_salary))}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Dependentes IRRF (Tab. 07):</span>
+                <strong className="text-slate-800">{Number(entry.dependents_count || 0)}</strong>
+              </div>
+            </>
+          )}
         </div>
 
         {isPj ? (
@@ -121,131 +155,95 @@ export const PayslipPreviewModal: React.FC<PayslipPreviewModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="bg-emerald-50 text-emerald-900 font-bold px-3 py-2 border-b border-emerald-100">
-                Proventos
-              </div>
-              <div className="p-3 space-y-1.5">
-                <div className="flex justify-between">
-                  <span>Salário Proporcional ({entry.worked_days}d)</span>
-                  <span className="font-mono">
-                    {formatBRL((Number(entry.base_salary) / 30) * Number(entry.worked_days))}
-                  </span>
-                </div>
-                {Number(entry.vacation_amount || 0) > 0 && (
-                  <div className="flex justify-between text-amber-900">
-                    <span>
-                      Férias Gozadas ({entry.vacation_days || 0}d) + 1/3
-                      {entry.vacation_period_label ? ` [${entry.vacation_period_label}]` : ''}
-                    </span>
-                    <span className="font-mono">{formatBRL(Number(entry.vacation_amount))}</span>
-                  </div>
-                )}
-                {Number(entry.vacation_double_amount || 0) > 0 && (
-                  <div className="flex justify-between text-rose-800 font-semibold">
-                    <span>
-                      Dobra de Férias Vencidas · Art. 137 CLT ({entry.vacation_doubled_days || 0}d + 1/3)
-                    </span>
-                    <span className="font-mono">
-                      {formatBRL(Number(entry.vacation_double_amount))}
-                    </span>
-                  </div>
-                )}
-                {Number(entry.vacation_abono_amount || 0) > 0 && (
-                  <div className="flex justify-between text-emerald-800">
-                    <span>Abono Pecuniário ({entry.vacation_sold_days || 0}d · Isento)</span>
-                    <span className="font-mono">
-                      {formatBRL(Number(entry.vacation_abono_amount))}
-                    </span>
-                  </div>
-                )}
-                {Number(entry.leave_paid_amount || 0) > 0 && (
-                  <div className="flex justify-between text-[#082175]">
-                    <span>Licença / Afastamento Remunerado ({entry.leave_days || 0}d)</span>
-                    <span className="font-mono">{formatBRL(Number(entry.leave_paid_amount))}</span>
-                  </div>
-                )}
-                {Number(entry.thirteenth_amount || 0) > 0 && (
-                  <div className="flex justify-between text-emerald-900">
-                    <span>13º Salário (Gratificação Natalina)</span>
-                    <span className="font-mono">{formatBRL(Number(entry.thirteenth_amount))}</span>
-                  </div>
-                )}
-                {Number(entry.overtime_amount) > 0 && (
-                  <div className="flex justify-between">
-                    <span>Horas Extras</span>
-                    <span className="font-mono">{formatBRL(Number(entry.overtime_amount))}</span>
-                  </div>
-                )}
-                {Number(entry.dsr_amount) > 0 && (
-                  <div className="flex justify-between">
-                    <span>DSR sobre Variáveis</span>
-                    <span className="font-mono">{formatBRL(Number(entry.dsr_amount))}</span>
-                  </div>
-                )}
-                {Number(entry.bonuses) > 0 && (
-                  <div className="flex justify-between">
-                    <span>Bonificações / Comissões</span>
-                    <span className="font-mono">{formatBRL(Number(entry.bonuses))}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+            <table className="w-full">
+              <thead className="bg-[#082175] text-white text-[11px]">
+                <tr>
+                  <th className="py-2.5 px-3 text-left font-semibold">Cód. S-1010</th>
+                  <th className="py-2.5 px-2 text-center font-semibold">Nat. Tab. 03</th>
+                  <th className="py-2.5 px-3 text-left font-semibold">Descrição da Rubrica</th>
+                  <th className="py-2.5 px-2 text-center font-semibold">Ref.</th>
+                  <th className="py-2.5 px-2 text-center font-semibold">Incid. CP/IR/FGTS</th>
+                  <th className="py-2.5 px-3 text-right font-semibold">Vencimentos</th>
+                  <th className="py-2.5 px-3 text-right font-semibold">Descontos</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rubricas.map((item) => (
+                  <tr key={item.codRubr} className="hover:bg-slate-50">
+                    <td className="py-2 px-3 font-mono font-bold text-[#082175]">
+                      {item.codRubr}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono font-semibold text-slate-600">
+                      {item.natRubr}
+                    </td>
+                    <td className="py-2 px-3 font-medium text-slate-800">{item.dscRubr}</td>
+                    <td className="py-2 px-2 text-center font-mono text-slate-500">
+                      {item.refLabel}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono text-[10px] text-slate-400">
+                      {item.codIncCP}/{item.codIncIRRF}/{item.codIncFGTS}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-emerald-700">
+                      {item.tpRubr === 1 ? formatBRL(item.vrRubr) : ''}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-rose-700">
+                      {item.tpRubr === 2
+                        ? item.vrRubr === 0
+                          ? 'R$ 0,00 (Isento)'
+                          : `-${formatBRL(item.vrRubr)}`
+                        : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="bg-red-50 text-red-900 font-bold px-3 py-2 border-b border-red-100">
-                Descontos
-              </div>
-              <div className="p-3 space-y-1.5">
-                <div className="flex justify-between">
-                  <span>INSS Progressivo</span>
-                  <span className="font-mono text-red-700">
-                    -{formatBRL(Number(entry.inss_amount))}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>IRRF Retido (c/ Lei 15.270)</span>
-                  <span className="font-mono text-red-700">
-                    -{formatBRL(Number(entry.irrf_amount))}
-                  </span>
-                </div>
-                {Number(entry.vt_discount_amount) > 0 && (
-                  <div className="flex justify-between">
-                    <span>Vale-Transporte</span>
-                    <span className="font-mono text-red-700">
-                      -{formatBRL(Number(entry.vt_discount_amount))}
-                    </span>
-                  </div>
-                )}
-                {Number(entry.vr_discount) + Number(entry.other_discounts) > 0 && (
-                  <div className="flex justify-between">
-                    <span>VR / Outros Descontos</span>
-                    <span className="font-mono text-red-700">
-                      -{formatBRL(Number(entry.vr_discount) + Number(entry.other_discounts))}
-                    </span>
-                  </div>
-                )}
-              </div>
+        {/* Rodapé de Bases eSocial S-5001 / S-5002 / S-5003 e Líquido S-1210 */}
+        {!isPj && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+            <div>
+              <span className="text-slate-500 block">Base INSS (S-5001)</span>
+              <strong className="font-mono text-slate-800">{formatBRL(baseInss)}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Base FGTS (S-5003)</span>
+              <strong className="font-mono text-slate-800">{formatBRL(baseInss)}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">FGTS do Mês (8%)</span>
+              <strong className="font-mono text-[#082175]">
+                {formatBRL(Number(entry.fgts_amount))}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Base IRRF (S-5002 · CR 056107)</span>
+              <strong className="font-mono text-slate-800">{formatBRL(baseIrrf)}</strong>
             </div>
           </div>
         )}
 
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 grid grid-cols-3 gap-3 text-xs text-center">
           <div>
-            <span className="text-slate-500 block">{isPj ? 'Valor NFS-e' : 'Total Bruto'}</span>
+            <span className="text-slate-500 block">
+              {isPj ? 'Valor NFS-e' : 'Total Vencimentos (tpRubr=1)'}
+            </span>
             <strong className="text-sm font-mono text-[#082175]">
               {formatBRL(Number(entry.gross_salary))}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 block">Descontos / Retenções</span>
+            <span className="text-slate-500 block">
+              {isPj ? 'Retenções / Glosas' : 'Total Descontos (tpRubr=2)'}
+            </span>
             <strong className="text-sm font-mono text-red-700">
               -{formatBRL(Number(entry.total_discounts))}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 block">Líquido a Receber</span>
+            <span className="text-slate-500 block">Líquido a Receber (vrLiq S-1210)</span>
             <strong className="text-base font-mono text-emerald-700">
               {formatBRL(Number(entry.net_salary))}
             </strong>
@@ -259,19 +257,23 @@ export const PayslipPreviewModal: React.FC<PayslipPreviewModalProps> = ({
             ) : (
               <Calendar className="w-3.5 h-3.5" />
             )}
-            <span>{isPj ? 'Documento PJ / NFS-e' : 'Base Legal: CLT + Lei 15.270/2025'}</span>
+            <span>
+              {isPj
+                ? 'Documento PJ / NFS-e'
+                : 'Leiaute eSocial v. S-1.3 (Tabelas 03 e 21) + CLT + Lei 15.270/2025'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => printIsolatedPayslip({ company, entry, employee, job })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir Via Única</span>
+              <span>Imprimir Holerite eSocial</span>
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-1.5 rounded-lg bg-[#082175] text-white font-semibold"
+              className="px-4 py-1.5 rounded-lg bg-[#082175] text-white font-semibold cursor-pointer"
             >
               Fechar
             </button>

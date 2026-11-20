@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCcb } from '../context/CcbContext';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   Users,
   DollarSign,
@@ -112,43 +113,40 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ onNaviga
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Painel da Diretoria e Gestão de Pessoas
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Resumo Gerencial · {companyName}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Acompanhamento consolidado do quadro de colaboradores, folha de pagamento, contratações e documentos.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => onNavigateTab('recruitment')}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
-          >
-            <Briefcase className="w-3.5 h-3.5 text-[#f5a90e]" />
-            <span>Processo Seletivo</span>
-          </button>
-          <button
-            onClick={() => onNavigateTab('payroll')}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#9F8548]/15 hover:bg-[#9F8548]/25 text-[#9F8548] font-semibold text-xs transition-colors"
-          >
-            <DollarSign className="w-3.5 h-3.5" />
-            <span>Folha de Pagamento</span>
-          </button>
-          <button
-            onClick={() => onNavigateTab('employees')}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E0F4F7] hover:bg-[#c8e8ed] text-[#03416A] font-semibold text-xs transition-colors"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Ver Funcionários</span>
-          </button>
-        </div>
-      </div>
+          </span>
+        }
+        title={`Resumo Gerencial · ${companyName}`}
+        subtitle="Acompanhamento consolidado do quadro de colaboradores, folha de pagamento, contratações e documentos."
+        actions={
+          <>
+            <button
+              onClick={() => onNavigateTab('recruitment')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              <Briefcase className="w-3.5 h-3.5" />
+              <span>Processo Seletivo</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('payroll')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              <DollarSign className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span>Folha de Pagamento</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('employees')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span>Ver Funcionários</span>
+            </button>
+          </>
+        }
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

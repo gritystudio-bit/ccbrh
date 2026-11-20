@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import legalCatalogData from '../../data/legalBaseCatalog.json';
 import { supabase } from '../../lib/supabase';
+import { ModuleBanner } from '../ui/ModuleBanner';
 import {
   BookOpen,
   CheckCircle2,
@@ -312,36 +313,31 @@ export const LegalConsultationModule: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
-            Compliance Trabalhista & Previdenciário · Base Oficial em Markdown (.md)
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1 flex items-center gap-2.5">
-            <Scale className="w-6 h-6 text-[#9F8548]" />
-            <span>Consulta Jurídica Trabalhista</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Consulta rápida sobre CLT (Decreto-Lei nº 5.452/1943), Reforma Trabalhista (Lei nº 13.467/2017) e Isenção de IRRF até R$ 5.000 (Lei nº 15.270/2025).
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
+            <Scale className="w-3 h-3" />
+            <span>Compliance Trabalhista & Previdenciário · Base Oficial (.md)</span>
+          </span>
+        }
+        title="Consulta Jurídica Trabalhista"
+        subtitle="Consulta rápida sobre CLT (Decreto-Lei nº 5.452/1943), Reforma Trabalhista (Lei nº 13.467/2017) e Isenção de IRRF até R$ 5.000 (Lei nº 15.270/2025)."
+        actions={
           <button
             type="button"
             onClick={handleSyncMarkdownToStorage}
             disabled={syncingStorage}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#082175]/25 bg-[#E0F4F7]/60 hover:bg-[#E0F4F7] text-[#082175] font-semibold text-xs transition-colors cursor-pointer disabled:opacity-60"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
           >
             {syncingStorage ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <CloudUpload className="w-3.5 h-3.5" />
+              <CloudUpload className="w-3.5 h-3.5 text-[#f5a90e]" />
             )}
             <span>{syncingStorage ? 'Sincronizando .md...' : 'Sincronizar Bases (.md)'}</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Carrossel Compacto das Bases Legais (.md) */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">

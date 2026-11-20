@@ -3,6 +3,7 @@ import { useCcb } from '../context/CcbContext';
 import { Candidate, DocumentRecord, DocumentType } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { triggerBrowserDownload } from '../utils/documentViewer';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   FileCheck,
   Upload,
@@ -269,62 +270,62 @@ export const CandidatePortalModule: React.FC<CandidatePortalModuleProps> = ({
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Portal Seguro de Autoenvio
-          </p>
-          <h2 className="text-lg font-bold text-[#082175] mt-0.5">
-            Envio de Documentos para Admissão
-          </h2>
-        </div>
+          </span>
+        }
+        title="Envio de Documentos para Admissão"
+        subtitle={`Pasta segura com validade por token para ${companyDisplayName}.`}
+        actions={
+          !isPublic ? (
+            <>
+              <div className="flex items-center gap-2 text-xs bg-white/10 border border-white/20 rounded-xl px-2.5 py-1.5">
+                <span className="text-slate-200 font-medium">Candidato:</span>
+                <select
+                  aria-label="Selecionar Candidato"
+                  value={candidate.id}
+                  onChange={(e) => setSelectedCandidateId(e.target.value)}
+                  className="bg-transparent text-white text-xs font-bold outline-none [&_option]:text-slate-900"
+                >
+                  {candidates.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name} ({c.pipeline_stage}){' '}
+                      {new Date(c.token_expires_at) < now ? '[Link Vencido]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        {!isPublic && (
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 font-medium">Candidato:</span>
-              <select
-                aria-label="Selecionar Candidato"
-                value={candidate.id}
-                onChange={(e) => setSelectedCandidateId(e.target.value)}
-                className="bg-slate-50 text-[#03416A] border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium outline-none focus:border-[#082175]"
-              >
-                {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name} ({c.pipeline_stage}){' '}
-                    {new Date(c.token_expires_at) < now ? '[Link Vencido]' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setActiveRoleView('recruiter')}
-                className={`px-3 py-1.5 rounded transition-colors cursor-pointer ${
-                  activeRoleView === 'recruiter'
-                    ? 'bg-white text-[#082175] shadow-xs'
-                    : 'text-slate-600 hover:text-[#082175]'
-                }`}
-              >
-                Revisão do RH
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveRoleView('candidate')}
-                className={`px-3 py-1.5 rounded transition-colors cursor-pointer ${
-                  activeRoleView === 'candidate'
-                    ? 'bg-white text-[#082175] shadow-xs'
-                    : 'text-slate-600 hover:text-[#082175]'
-                }`}
-              >
-                Visão do Candidato
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+              <div className="flex items-center bg-white/10 border border-white/20 p-0.5 rounded-xl text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setActiveRoleView('recruiter')}
+                  className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                    activeRoleView === 'recruiter'
+                      ? 'bg-white text-[#082175] shadow-xs'
+                      : 'text-slate-200 hover:text-white'
+                  }`}
+                >
+                  Revisão do RH
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveRoleView('candidate')}
+                  className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                    activeRoleView === 'candidate'
+                      ? 'bg-white text-[#082175] shadow-xs'
+                      : 'text-slate-200 hover:text-white'
+                  }`}
+                >
+                  Visão do Candidato
+                </button>
+              </div>
+            </>
+          ) : undefined
+        }
+      />
 
       {uploadFeedback && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 font-medium">

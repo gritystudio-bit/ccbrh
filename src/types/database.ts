@@ -477,6 +477,200 @@ export interface EmployeeBenefitRecord {
   updated_at: string;
 }
 
+export type EsocialEventCategory = 'tabelas' | 'nao_periodicos' | 'periodicos' | 'controle';
+
+export type EsocialEventStatus =
+  | 'draft'
+  | 'pending'
+  | 'validated'
+  | 'transmitted'
+  | 'accepted'
+  | 'rejected'
+  | 'excluded';
+
+export type EsocialEventCode =
+  | 'S-1000'
+  | 'S-1005'
+  | 'S-1010'
+  | 'S-1020'
+  | 'S-2190'
+  | 'S-2200'
+  | 'S-2205'
+  | 'S-2206'
+  | 'S-2230'
+  | 'S-2299'
+  | 'S-2300'
+  | 'S-2399'
+  | 'S-1200'
+  | 'S-1210'
+  | 'S-1298'
+  | 'S-1299'
+  | 'S-3000';
+
+export interface EsocialEmployerConfig {
+  id: string;
+  tenant_id: string;
+  layout_version: string;
+  tp_amb: 1 | 2;
+  proc_emi: number;
+  ver_proc: string;
+  class_trib: string;
+  ind_coop: number;
+  ind_constr: number;
+  ind_des_folha: number;
+  ind_opt_reg_eletron: number;
+  fpas: string;
+  cod_tercs: string;
+  aliq_rat: number;
+  fap: number;
+  cod_lotacao: string;
+  tp_lotacao: string;
+  ide_tab_rubr: string;
+  cnae_prep: string;
+  cnpj_sind_default: string;
+  trans_dctfweb: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EsocialReturnTotals {
+  s5001_inss_segurado?: number;
+  s5001_base_cp?: number;
+  s5002_irrf_retido?: number;
+  s5002_base_irrf?: number;
+  s5002_lei15270_isento?: boolean;
+  s5003_fgts_mensal?: number;
+  s5003_base_fgts?: number;
+  s5011_cp_patronal?: number;
+  s5011_gilrat?: number;
+  s5011_terceiros?: number;
+  s5012_irrf_consolidado?: number;
+  s5013_fgts_digital_total?: number;
+}
+
+export interface EsocialEventRecord {
+  id: string;
+  tenant_id: string;
+  event_code: EsocialEventCode;
+  event_name: string;
+  event_category: EsocialEventCategory;
+  event_uid: string;
+  competence?: string | null;
+  employee_id?: string | null;
+  payroll_entry_id?: string | null;
+  vacation_id?: string | null;
+  ind_retif: 1 | 2;
+  tp_amb: 1 | 2;
+  status: EsocialEventStatus;
+  receipt_number?: string | null;
+  protocol_number?: string | null;
+  orig_receipt_number?: string | null;
+  validation_errors: string[];
+  validation_warnings: string[];
+  payload_summary: Record<string, string | number | boolean | null>;
+  xml_content: string;
+  return_totals?: EsocialReturnTotals | null;
+  transmitted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReinfEventSeries = 'tabelas' | 'r2000' | 'r4000' | 'controle';
+
+export type ReinfEventStatus =
+  | 'draft'
+  | 'pending'
+  | 'validated'
+  | 'transmitted'
+  | 'accepted'
+  | 'rejected'
+  | 'excluded';
+
+export type ReinfEventCode =
+  | 'R-1000'
+  | 'R-1050'
+  | 'R-1070'
+  | 'R-2010'
+  | 'R-2020'
+  | 'R-2060'
+  | 'R-2098'
+  | 'R-2099'
+  | 'R-4010'
+  | 'R-4020'
+  | 'R-4040'
+  | 'R-4080'
+  | 'R-4099'
+  | 'R-9000';
+
+export interface ReinfContributorConfig {
+  id: string;
+  tenant_id: string;
+  layout_version: string;
+  tp_amb: 1 | 2;
+  proc_emi: 1 | 2;
+  ver_proc: string;
+  class_trib: string;
+  ind_escrituracao: 0 | 1;
+  ind_desoneracao: 0 | 1;
+  ind_acordo_isen_multa: 0 | 1;
+  ind_sit_pj: 0 | 1 | 2 | 3 | 4;
+  contato_nome: string;
+  contato_cpf: string;
+  contato_fone: string;
+  contato_email: string;
+  resp_nome: string;
+  resp_cpf: string;
+  default_nat_rend_pj: string;
+  default_tp_servico_cp: string;
+  trans_dctfweb: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReinfReturnTotals {
+  r9001_base_cp?: number;
+  r9001_ret_cp?: number;
+  r9001_cprb?: number;
+  r9005_base_ir?: number;
+  r9005_vlr_ir?: number;
+  r9005_vlr_csll?: number;
+  r9005_vlr_cofins?: number;
+  r9005_vlr_pp?: number;
+  r9005_vlr_agreg?: number;
+  r9011_dctfweb_cp?: number;
+  r9015_dctfweb_ret?: number;
+  ident_escrit_dctf?: string;
+}
+
+export interface ReinfEventRecord {
+  id: string;
+  tenant_id: string;
+  event_code: ReinfEventCode;
+  event_name: string;
+  event_series: ReinfEventSeries;
+  event_uid: string;
+  competence?: string | null;
+  employee_id?: string | null;
+  payroll_entry_id?: string | null;
+  beneficiary_doc?: string | null;
+  beneficiary_name?: string | null;
+  nat_rend?: string | null;
+  ind_retif: 1 | 2;
+  tp_amb: 1 | 2;
+  status: ReinfEventStatus;
+  receipt_number?: string | null;
+  protocol_number?: string | null;
+  orig_receipt_number?: string | null;
+  validation_errors: string[];
+  validation_warnings: string[];
+  payload_summary: Record<string, string | number | boolean | null>;
+  xml_content: string;
+  return_totals?: ReinfReturnTotals | null;
+  transmitted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CcbDatabase {
   companies: Company[];
   branches: CompanyBranch[];

@@ -3,6 +3,7 @@ import { useCcb } from '../context/CcbContext';
 import { Employee, EmployeeContractType, EmployeeStatus } from '../types/database';
 import { EmployeeProfileView } from './employees/EmployeeProfileView';
 import { buildFallbackDocumentBlobUrl } from '../utils/documentViewer';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   UserPlus,
   Layers,
@@ -355,72 +356,69 @@ export const OrganogramModule: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Dossiê Digital 360º, Documentos e Hierarquia
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Funcionários
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Clique em um funcionário para abrir seu perfil completo (Informações Pessoais, Dados Bancários, Formação, Dependentes e Documentos).
-          </p>
-        </div>
+          </span>
+        }
+        title="Funcionários"
+        subtitle="Clique em um colaborador para abrir perfil completo, férias, benefícios, documentos e holerites."
+        actions={
+          <>
+            <div className="flex items-center gap-2 text-xs bg-white/10 border border-white/20 rounded-xl px-2.5 py-1.5">
+              <span className="text-slate-200 font-medium">Situação:</span>
+              <select
+                aria-label="Filtrar por Situação"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-transparent text-white font-bold text-xs outline-none [&_option]:text-slate-900"
+              >
+                <option value="all">Todos ({employees.length})</option>
+                <option value="active">Ativos</option>
+                <option value="vacation">Férias</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-medium">Situação:</span>
-            <select
-              aria-label="Filtrar por Situação"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-50 text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#082175]"
-            >
-              <option value="all">Todos ({employees.length})</option>
-              <option value="active">Ativos</option>
-              <option value="vacation">Férias</option>
-              <option value="inactive">Inativos</option>
-            </select>
-          </div>
+            <div className="flex items-center bg-white/10 border border-white/20 p-0.5 rounded-xl text-xs font-semibold">
+              <button
+                onClick={() => setViewMode('tree')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                  viewMode === 'tree'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Organograma</span>
+              </button>
+              <button
+                onClick={() => setViewMode('directory')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                  viewMode === 'directory'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Diretório</span>
+              </button>
+            </div>
 
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
             <button
-              onClick={() => setViewMode('tree')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
-                viewMode === 'tree'
-                  ? 'bg-white text-[#082175] shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
+              onClick={() => {
+                resetEmployeeForm();
+                setShowAddModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
             >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Organograma</span>
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Cadastrar Funcionário</span>
             </button>
-            <button
-              onClick={() => setViewMode('directory')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
-                viewMode === 'directory'
-                  ? 'bg-white text-[#082175] shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>Diretório</span>
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              resetEmployeeForm();
-              setShowAddModal(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs rounded-lg transition-colors shadow-xs"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-[#f5a90e]" />
-            <span>Cadastrar Funcionário</span>
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {viewMode === 'tree' ? (
         <div className="p-8 rounded-xl bg-white border border-slate-200 overflow-x-auto min-h-[520px] shadow-xs">

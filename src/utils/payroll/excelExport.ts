@@ -1,5 +1,9 @@
 import * as XLSX from 'xlsx';
 import { Company, Employee, Job, PayrollEntry } from '../../types/database';
+import {
+  decomposePayrollEntryToS1200Items,
+  deriveMatricula,
+} from '../esocial/esocialS13Engine';
 
 const STATUS_LABELS: Record<PayrollEntry['status'], string> = {
   draft: 'Rascunho',
@@ -213,10 +217,43 @@ export function exportPayrollToExcel(params: {
     };
   });
 
+  const s1200RubricaRows = cltEntries.flatMap((entry) => {
+    const emp = employees.find((e) => e.id === entry.employee_id);
+    const matricula = emp ? deriveMatricula(emp) : 'CLT-000000';
+    const ideDmDev = `DMDEV-${competence.replace('-', '')}-${matricula.slice(-6)}`;
+    const items = decomposePayrollEntryToS1200Items(entry, 'TABRUB-CCB-S13', {
+      includeZeroIrrf: true,
+    });
+
+    return items.map((item) => ({
+      Competência: competence,
+      'Matrícula eSocial': matricula,
+      CPF: emp?.cpf || '',
+      Colaborador: emp?.full_name || 'Colaborador',
+      ideDmDev,
+      'Cód. S-1010 (codRubr)': item.codRubr,
+      'Tabela (ideTabRubr)': item.ideTabRubr,
+      'Nat. Tab. 03 (natRubr)': item.natRubr,
+      'Natureza da Rubrica': item.natRubrDesc || '',
+      'Descrição da Rubrica (dscRubr)': item.dscRubr,
+      'Tipo (tpRubr)': item.tpRubr === 1 ? '1 - Vencimento' : '2 - Desconto',
+      Referência: item.refLabel || '1,00',
+      'Incid. CP (codIncCP)': item.codIncCP || '00',
+      'Incid. IRRF Tab. 21 (codIncIRRF)': item.codIncIRRF || '00',
+      'Incid. FGTS (codIncFGTS)': item.codIncFGTS || '00',
+      'Vencimentos (R$)': item.tpRubr === 1 ? round2(item.vrRubr) : 0,
+      'Descontos (R$)': item.tpRubr === 2 ? round2(item.vrRubr) : 0,
+    }));
+  });
+
   const wb = XLSX.utils.book_new();
   if (cltRows.length > 0 || pjRows.length === 0) {
     const wsClt = XLSX.utils.json_to_sheet(cltRows);
     XLSX.utils.book_append_sheet(wb, wsClt, 'Folha CLT (PF)');
+  }
+  if (s1200RubricaRows.length > 0) {
+    const wsRubricas = XLSX.utils.json_to_sheet(s1200RubricaRows);
+    XLSX.utils.book_append_sheet(wb, wsRubricas, 'Rubricas eSocial S-1200');
   }
   if (pjRows.length > 0) {
     const wsPj = XLSX.utils.json_to_sheet(pjRows);

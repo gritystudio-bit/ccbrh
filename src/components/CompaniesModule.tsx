@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCcb } from '../context/CcbContext';
 import { Company, CompanyBranch, ContactLead } from '../types/database';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   Building2,
   CheckCircle2,
@@ -270,32 +271,29 @@ export const CompaniesModule: React.FC<CompaniesModuleProps> = ({
         </div>
       )}
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Carteira Exclusiva CCB · Gestão Multi-Empresa
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Empresas Clientes Cadastradas
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-            Selecione qualquer empresa abaixo para que a equipe CCB administre seus colaboradores,
-            folha de pagamento, vagas e processo seletivo em ambiente de dados isolado.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            resetCompanyForm();
-            setShowAddModal(true);
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#082175] text-white text-xs sm:text-sm font-semibold hover:bg-[#0a2a8a] transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4 text-[#f5a90e]" />
-          <span>Cadastrar Empresa Cliente</span>
-        </button>
-      </div>
+          </span>
+        }
+        title="Empresas Clientes Cadastradas"
+        subtitle="Selecione qualquer empresa abaixo para administrar colaboradores, folha de pagamento, vagas e obrigações em ambiente de dados isolado."
+        maxSubtitleWidth="max-w-2xl"
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              resetCompanyForm();
+              setShowAddModal(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Cadastrar Empresa Cliente</span>
+          </button>
+        }
+      />
 
       {/* KPIs Consolidados */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

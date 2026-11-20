@@ -11,6 +11,8 @@ import {
   Users,
   UserCheck,
   Calculator,
+  FileCode2,
+  ReceiptText,
   Scale,
   Settings,
   LifeBuoy,
@@ -26,6 +28,8 @@ export type ActiveTab =
   | 'vacancies'
   | 'employees'
   | 'payroll'
+  | 'esocial'
+  | 'reinf'
   | 'legal'
   | 'portal'
   | 'settings'
@@ -112,6 +116,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           count: metrics.totalHeadcount,
         },
         { id: 'payroll', label: 'Folha de Pagamento', icon: Calculator },
+        { id: 'esocial', label: 'eSocial (S-1.3)', icon: FileCode2 },
+        { id: 'reinf', label: 'EFD-Reinf (2.1.2b)', icon: ReceiptText },
       ],
     },
     {

@@ -23,6 +23,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useCcb } from '../../context/CcbContext';
 import { processAvatarImageFile } from '../../utils/avatarImage';
+import { ModuleBanner } from '../ui/ModuleBanner';
 
 interface UserProfileRow {
   id: string;
@@ -436,28 +437,23 @@ export const SettingsModule: React.FC = () => {
       )}
 
       {/* Cabeçalho do Módulo */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
-              Administração da Plataforma · Governança & Acessos
-            </span>
-            <h1 className="text-2xl font-bold text-slate-900 mt-0.5">
-              Configurações & Gestão de Usuários
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Personalize os dados do seu perfil administrativo, gerencie credenciais e convide membros da equipe.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl self-start md:self-auto">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
+            Administração da Plataforma · Governança & Acessos
+          </span>
+        }
+        title="Configurações & Gestão de Usuários"
+        subtitle="Personalize os dados do seu perfil administrativo, gerencie credenciais e convide membros da equipe."
+        actions={
+          <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveSubTab('profile')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeSubTab === 'profile'
-                  ? 'bg-[#0b2254] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#082175] shadow-sm'
+                  : 'text-slate-200 hover:text-white'
               }`}
             >
               <User className="w-3.5 h-3.5" />
@@ -466,18 +462,18 @@ export const SettingsModule: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveSubTab('team')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeSubTab === 'team'
-                  ? 'bg-[#0b2254] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#082175] shadow-sm'
+                  : 'text-slate-200 hover:text-white'
               }`}
             >
               <Users className="w-3.5 h-3.5" />
               Usuários & Convites ({teamProfiles.length})
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {loading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 flex flex-col items-center justify-center gap-3 text-slate-500">

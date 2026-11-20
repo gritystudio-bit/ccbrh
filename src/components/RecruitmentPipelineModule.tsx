@@ -8,6 +8,7 @@ import {
 } from '../types/database';
 import { CandidateLocationMap } from './CandidateLocationMap';
 import { CandidateDocumentsModal } from './recruitment/CandidateDocumentsModal';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   calculateDistanceKm,
   estimatePublicTransitMorningPeak,
@@ -351,89 +352,86 @@ export const RecruitmentPipelineModule: React.FC<RecruitmentPipelineModuleProps>
       )}
 
       {/* Header and Controls */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Etapas do Processo Seletivo
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Recrutamento e Seleção de Candidatos
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Acompanhe visualmente cada etapa, visualize candidatos no mapa por proximidade e gerencie o banco de talentos.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* View Toggle */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition-colors ${
-                viewMode === 'kanban'
-                  ? 'bg-[#082175] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              <Kanban className="w-3.5 h-3.5" />
-              <span>Kanban ({filteredCandidates.length})</span>
-            </button>
-            <button
-              onClick={() => setViewMode('location')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition-colors ${
-                viewMode === 'location'
-                  ? 'bg-[#082175] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              <span>Localização</span>
-            </button>
-            <button
-              onClick={() => setViewMode('talent_bank')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition-colors ${
-                viewMode === 'talent_bank'
-                  ? 'bg-[#082175] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Banco de Talentos ({talentBank.length})</span>
-            </button>
-          </div>
-
-          {viewMode !== 'talent_bank' && (
-            <div className="flex items-center gap-2 text-xs">
-              <Filter className="w-3.5 h-3.5 text-[#9F8548]" />
-              <span className="font-semibold text-[#03416A]">Vaga:</span>
-              <select
-                aria-label="Filtrar por Vaga"
-                value={selectedVacancyFilter}
-                onChange={(e) => setSelectedVacancyFilter(e.target.value)}
-                className="bg-slate-50 text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:border-[#082175] outline-none"
+          </span>
+        }
+        title="Recrutamento e Seleção de Candidatos"
+        subtitle="Acompanhe visualmente cada etapa, visualize candidatos no mapa por proximidade e gerencie o banco de talentos."
+        actions={
+          <>
+            {/* View Toggle */}
+            <div className="inline-flex rounded-xl border border-white/20 bg-white/10 p-0.5 text-xs">
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-200 hover:text-white'
+                }`}
               >
-                <option value="all">Todas as Vagas ({vacancies.length})</option>
-                {vacancies.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.title}
-                  </option>
-                ))}
-              </select>
+                <Kanban className="w-3.5 h-3.5" />
+                <span>Kanban ({filteredCandidates.length})</span>
+              </button>
+              <button
+                onClick={() => setViewMode('location')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  viewMode === 'location'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Localização</span>
+              </button>
+              <button
+                onClick={() => setViewMode('talent_bank')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  viewMode === 'talent_bank'
+                    ? 'bg-white text-[#082175] shadow-xs'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Banco de Talentos ({talentBank.length})</span>
+              </button>
             </div>
-          )}
 
-          <button
-            onClick={() => {
-              resetCandidateForm();
-              setShowNewCandidateModal(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs rounded-lg transition-colors shadow-xs"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-[#f5a90e]" />
-            <span>Adicionar Candidato</span>
-          </button>
-        </div>
-      </div>
+            {viewMode !== 'talent_bank' && (
+              <div className="flex items-center gap-2 text-xs bg-white/10 border border-white/20 rounded-xl px-2.5 py-1.5">
+                <Filter className="w-3.5 h-3.5 text-[#f5a90e]" />
+                <span className="font-semibold text-slate-200">Vaga:</span>
+                <select
+                  aria-label="Filtrar por Vaga"
+                  value={selectedVacancyFilter}
+                  onChange={(e) => setSelectedVacancyFilter(e.target.value)}
+                  className="bg-transparent text-white font-bold text-xs outline-none [&_option]:text-slate-900"
+                >
+                  <option value="all">Todas as Vagas ({vacancies.length})</option>
+                  {vacancies.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                resetCandidateForm();
+                setShowNewCandidateModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Adicionar Candidato</span>
+            </button>
+          </>
+        }
+      />
 
       {viewMode === 'location' ? (
         <CandidateLocationMap

@@ -8,6 +8,8 @@ import { VacanciesModule } from './components/VacanciesModule';
 import { OrganogramModule } from './components/OrganogramModule';
 import { EmployeeProfileView } from './components/employees/EmployeeProfileView';
 import { PayrollModule } from './components/PayrollModule';
+import { EsocialModule } from './components/esocial/EsocialModule';
+import { ReinfModule } from './components/reinf/ReinfModule';
 import { LegalConsultationModule } from './components/legal/LegalConsultationModule';
 import { SettingsModule } from './components/settings/SettingsModule';
 import { SupportView } from './components/support/SupportView';
@@ -387,6 +389,8 @@ function CcbrhMain() {
             {activeTab === 'vacancies' && <VacanciesModule />}
             {activeTab === 'employees' && <OrganogramModule />}
             {activeTab === 'payroll' && <PayrollModule />}
+            {activeTab === 'esocial' && <EsocialModule />}
+            {activeTab === 'reinf' && <ReinfModule />}
             {activeTab === 'legal' && <LegalConsultationModule />}
             {activeTab === 'settings' && <SettingsModule />}
             {activeTab === 'support' && <SupportView />}

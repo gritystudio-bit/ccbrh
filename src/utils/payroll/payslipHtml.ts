@@ -1,4 +1,9 @@
 import { Company, Employee, Job, PayrollEntry } from '../../types/database';
+import {
+  decomposePayrollEntryToS1200Items,
+  deriveCbo,
+  deriveMatricula,
+} from '../esocial/esocialS13Engine';
 
 const formatBRL = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -120,76 +125,65 @@ export function buildPayslipHtml(params: {
     return buildPjAuthorizationHtml(params);
   }
 
-  const proportionalBase = (Number(entry.base_salary) / 30) * Number(entry.worked_days);
-  const vrOther = Number(entry.vr_discount) + Number(entry.other_discounts);
   const hireDateFmt = employee?.hire_date
     ? employee.hire_date.split('-').reverse().join('/')
     : '-';
+  const matricula = employee ? deriveMatricula(employee) : 'MAT-0001';
+  const cbo = deriveCbo(job);
+  const rubricas = decomposePayrollEntryToS1200Items(entry, 'TABRUB01', { includeZeroIrrf: true });
+  const baseInss = Math.max(
+    0,
+    Number(entry.gross_salary || 0) -
+      Number(entry.vacation_abono_amount || 0) -
+      Number(entry.vacation_double_amount || 0) -
+      Number(entry.absence_discount_amount || 0)
+  );
+  const baseIrrf = Math.max(0, baseInss - Number(entry.inss_amount || 0));
 
-  const proventosRows = [
-    `<tr><td>Salário Proporcional (${entry.worked_days} dias)</td><td class="num">${formatBRL(proportionalBase)}</td></tr>`,
-    Number(entry.overtime_amount) > 0
-      ? `<tr><td>Horas Extras (50% / 100%)</td><td class="num">${formatBRL(Number(entry.overtime_amount))}</td></tr>`
-      : '',
-    Number(entry.night_shift_amount) > 0
-      ? `<tr><td>Adicional Noturno</td><td class="num">${formatBRL(Number(entry.night_shift_amount))}</td></tr>`
-      : '',
-    Number(entry.dsr_amount) > 0
-      ? `<tr><td>DSR sobre Variáveis</td><td class="num">${formatBRL(Number(entry.dsr_amount))}</td></tr>`
-      : '',
-    Number(entry.insalubrity_amount) > 0
-      ? `<tr><td>Insalubridade (${entry.insalubrity_rate}%)</td><td class="num">${formatBRL(Number(entry.insalubrity_amount))}</td></tr>`
-      : '',
-    Number(entry.hazard_amount) > 0
-      ? `<tr><td>Periculosidade (30%)</td><td class="num">${formatBRL(Number(entry.hazard_amount))}</td></tr>`
-      : '',
-    Number(entry.bonuses) > 0
-      ? `<tr><td>Bonificações / Comissões</td><td class="num">${formatBRL(Number(entry.bonuses))}</td></tr>`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('');
-
-  const descontosRows = [
-    `<tr><td>INSS Progressivo</td><td class="num neg">-${formatBRL(Number(entry.inss_amount))}</td></tr>`,
-    `<tr><td>IRRF Retido (Lei nº 15.270/2025)</td><td class="num neg">-${formatBRL(Number(entry.irrf_amount))}</td></tr>`,
-    Number(entry.vt_discount_amount) > 0
-      ? `<tr><td>Vale-Transporte (6%)</td><td class="num neg">-${formatBRL(Number(entry.vt_discount_amount))}</td></tr>`
-      : '',
-    Number(entry.absence_discount_amount) > 0
-      ? `<tr><td>Faltas (${entry.absence_days} dia(s))</td><td class="num neg">-${formatBRL(Number(entry.absence_discount_amount))}</td></tr>`
-      : '',
-    vrOther > 0
-      ? `<tr><td>VR / Outros Descontos</td><td class="num neg">-${formatBRL(vrOther)}</td></tr>`
-      : '',
-  ]
-    .filter(Boolean)
+  const rubricasRowsHtml = rubricas
+    .map(
+      (item) => `<tr>
+        <td style="font-family:monospace;font-weight:700;color:#082175;">${escapeHtml(item.codRubr)}</td>
+        <td style="text-align:center;font-family:monospace;">${escapeHtml(item.natRubr)}</td>
+        <td>${escapeHtml(item.dscRubr)}</td>
+        <td style="text-align:center;font-family:monospace;">${escapeHtml(item.refLabel)}</td>
+        <td style="text-align:center;font-family:monospace;font-size:10px;color:#64748b;">${escapeHtml(item.codIncCP)}/${escapeHtml(item.codIncIRRF)}/${escapeHtml(item.codIncFGTS)}</td>
+        <td class="num">${item.tpRubr === 1 ? formatBRL(item.vrRubr) : ''}</td>
+        <td class="num neg">${
+          item.tpRubr === 2
+            ? item.vrRubr === 0
+              ? 'R$ 0,00 (Isento)'
+              : `-${formatBRL(item.vrRubr)}`
+            : ''
+        }</td>
+      </tr>`
+    )
     .join('');
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Demonstrativo de Pagamento - ${escapeHtml(employee?.full_name || '')} (${escapeHtml(entry.competence)})</title>
+  <title>Demonstrativo de Pagamento eSocial S-1.3 - ${escapeHtml(employee?.full_name || '')} (${escapeHtml(entry.competence)})</title>
   <style>
     @page { size: A4 portrait; margin: 14mm; }
     * { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 12px; background: #fff; }
-    .sheet { border: 1.5px solid #082175; border-radius: 8px; padding: 20px; max-width: 720px; margin: 0 auto; }
+    .sheet { border: 1.5px solid #082175; border-radius: 8px; padding: 20px; max-width: 760px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 14px; }
     .kicker { color: #9f8548; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
     .company-name { color: #082175; font-size: 16px; font-weight: 700; margin: 3px 0; }
     .muted { color: #64748b; font-size: 11px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 11px; }
-    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 10px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #cbd5e1; padding: 6px 4px; }
-    td { padding: 5px 4px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
-    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; color: #fff; background: #082175; padding: 6px 6px; }
+    td { padding: 6px 6px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
     td.neg { color: #b91c1c; }
-    .totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; text-align: center; }
+    .bases { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; text-align: center; margin-bottom: 10px; font-size: 11px; }
+    .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; text-align: center; }
     .totals .val { font-size: 13px; font-weight: 700; color: #082175; margin-top: 2px; }
-    .totals .net { color: #047857; }
+    .totals .net { color: #047857; font-size: 15px; }
     .signature { margin-top: 26px; display: flex; justify-content: space-between; gap: 32px; font-size: 11px; color: #475569; }
     .sig-line { flex: 1; border-top: 1px solid #94a3b8; padding-top: 6px; text-align: center; }
   </style>
@@ -198,49 +192,57 @@ export function buildPayslipHtml(params: {
   <div class="sheet">
     <div class="header">
       <div>
-        <div class="kicker">Demonstrativo de Pagamento · CLT</div>
+        <div class="kicker">Recibo de Pagamento de Salário · Padrão eSocial S-1.3 (S-1200 / S-1210)</div>
         <div class="company-name">${escapeHtml(company?.name || 'Empresa Cliente')}</div>
-        <div class="muted">CNPJ: ${escapeHtml(company?.cnpj || '-')}</div>
+        <div class="muted">CNPJ: ${escapeHtml(company?.cnpj || '-')} · Demonstrativo ideDmDev: DM-${escapeHtml(entry.competence.replace('-', ''))}-${escapeHtml(matricula)}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:10px;color:#64748b;">COMPETÊNCIA</div>
+        <div style="font-size:10px;color:#64748b;">PERÍODO DE APURAÇÃO</div>
         <div style="font-size:15px;font-weight:700;color:#082175;">${escapeHtml(entry.competence)}</div>
-        <div class="muted">${entry.worked_days} dia(s) trabalhados</div>
+        <div class="muted">Categ. 101 (CLT) · ${entry.worked_days} dia(s)</div>
       </div>
     </div>
 
     <div class="meta-grid">
-      <div><strong>Colaborador:</strong> ${escapeHtml(employee?.full_name || '-')}</div>
-      <div><strong>CPF:</strong> ${escapeHtml(employee?.cpf || '-')}</div>
-      <div><strong>Cargo:</strong> ${escapeHtml(job?.title || '-')}</div>
+      <div><strong>Trabalhador:</strong> ${escapeHtml(employee?.full_name || '-')}</div>
+      <div><strong>CPF / Matrícula:</strong> ${escapeHtml(employee?.cpf || '-')} · ${escapeHtml(matricula)}</div>
+      <div><strong>Cargo / CBO:</strong> ${escapeHtml(job?.title || '-')} (CBO ${escapeHtml(cbo)})</div>
       <div><strong>Data Admissão:</strong> ${escapeHtml(hireDateFmt)}</div>
+      <div><strong>Salário Base (vrSalFx):</strong> ${formatBRL(Number(entry.base_salary))}</div>
+      <div><strong>Dep. IRRF (Tab. 07):</strong> ${Number(entry.dependents_count || 0)}</div>
     </div>
 
-    <div class="cols">
-      <div>
-        <table>
-          <thead><tr><th>Proventos</th><th style="text-align:right">Valor</th></tr></thead>
-          <tbody>${proventosRows}</tbody>
-        </table>
-      </div>
-      <div>
-        <table>
-          <thead><tr><th>Descontos</th><th style="text-align:right">Valor</th></tr></thead>
-          <tbody>${descontosRows}</tbody>
-        </table>
-      </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Cód. S-1010</th>
+          <th style="text-align:center">Nat. Tab.03</th>
+          <th>Descrição da Rubrica (dscRubr)</th>
+          <th style="text-align:center">Ref.</th>
+          <th style="text-align:center">Incid. CP/IR/FGTS</th>
+          <th style="text-align:right">Vencimentos</th>
+          <th style="text-align:right">Descontos</th>
+        </tr>
+      </thead>
+      <tbody>${rubricasRowsHtml}</tbody>
+    </table>
+
+    <div class="bases">
+      <div><div class="muted">Base INSS (S-5001)</div><strong>${formatBRL(baseInss)}</strong></div>
+      <div><div class="muted">Base FGTS (S-5003)</div><strong>${formatBRL(baseInss)}</strong></div>
+      <div><div class="muted">FGTS do Mês (8%)</div><strong>${formatBRL(Number(entry.fgts_amount))}</strong></div>
+      <div><div class="muted">Base IRRF (S-5002 · CR 056107)</div><strong>${formatBRL(baseIrrf)}</strong></div>
     </div>
 
     <div class="totals">
-      <div><div class="muted">Total Bruto</div><div class="val">${formatBRL(Number(entry.gross_salary))}</div></div>
-      <div><div class="muted">Total Descontos</div><div class="val" style="color:#b91c1c;">-${formatBRL(Number(entry.total_discounts))}</div></div>
-      <div><div class="muted">Líquido a Receber</div><div class="val net">${formatBRL(Number(entry.net_salary))}</div></div>
-      <div><div class="muted">FGTS do Mês (8%)</div><div class="val">${formatBRL(Number(entry.fgts_amount))}</div></div>
+      <div><div class="muted">Total de Vencimentos (tpRubr=1)</div><div class="val">${formatBRL(Number(entry.gross_salary))}</div></div>
+      <div><div class="muted">Total de Descontos (tpRubr=2)</div><div class="val" style="color:#b91c1c;">-${formatBRL(Number(entry.total_discounts))}</div></div>
+      <div><div class="muted">Valor Líquido (vrLiq S-1210)</div><div class="val net">${formatBRL(Number(entry.net_salary))}</div></div>
     </div>
 
     <div class="signature">
-      <div class="sig-line">Data: ____/____/________</div>
-      <div class="sig-line">Assinatura do Colaborador (${escapeHtml(employee?.full_name || '')})</div>
+      <div class="sig-line">Data do Recebimento: ____/____/________</div>
+      <div class="sig-line">Assinatura do Trabalhador (${escapeHtml(employee?.full_name || '')})</div>
     </div>
   </div>
 </body>

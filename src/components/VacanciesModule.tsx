@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCcb } from '../context/CcbContext';
 import { ApiSource, Job, Vacancy, VacancyStatus } from '../types/database';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   Briefcase,
   Plus,
@@ -177,72 +178,69 @@ export const VacanciesModule: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
             Gestão de Vagas e Cargos
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Vagas, Cargos e Portais Integrados
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Gerencie vagas abertas, estrutura de cargos/salários base e portais públicos de vagas.
-          </p>
-        </div>
+          </span>
+        }
+        title="Vagas, Cargos e Portais Integrados"
+        subtitle="Gerencie vagas abertas, estrutura de cargos/salários base e portais públicos de vagas."
+        actions={
+          <>
+            <div className="inline-flex rounded-xl border border-white/20 bg-white/10 p-0.5 text-xs">
+              <button
+                onClick={() => setActiveSection('vacancies')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  activeSection === 'vacancies'
+                    ? 'bg-white text-[#082175]'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Vagas ({vacancies.length})
+              </button>
+              <button
+                onClick={() => setActiveSection('jobs')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                  activeSection === 'jobs'
+                    ? 'bg-white text-[#082175]'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Cargos e Salários ({jobs.length})
+              </button>
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
-            <button
-              onClick={() => setActiveSection('vacancies')}
-              className={`px-3 py-1.5 rounded-md font-semibold ${
-                activeSection === 'vacancies'
-                  ? 'bg-[#082175] text-white'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              Vagas ({vacancies.length})
-            </button>
-            <button
-              onClick={() => setActiveSection('jobs')}
-              className={`px-3 py-1.5 rounded-md font-semibold ${
-                activeSection === 'jobs'
-                  ? 'bg-[#082175] text-white'
-                  : 'text-slate-600 hover:text-[#082175]'
-              }`}
-            >
-              Cargos e Salários ({jobs.length})
-            </button>
-          </div>
-
-          {activeSection === 'vacancies' ? (
-            <button
-              onClick={() => {
-                resetVacancyForm();
-                setShowAddModal(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
-            >
-              <Plus className="w-4 h-4 text-[#f5a90e]" />
-              <span>Publicar Nova Vaga</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setEditingJob(null);
-                setJobTitleInput('');
-                setJobDeptInput('');
-                setJobSalaryInput('');
-                setJobDescInput('');
-                setShowJobModal(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors"
-            >
-              <Plus className="w-4 h-4 text-[#f5a90e]" />
-              <span>Novo Cargo</span>
-            </button>
-          )}
-        </div>
-      </div>
+            {activeSection === 'vacancies' ? (
+              <button
+                onClick={() => {
+                  resetVacancyForm();
+                  setShowAddModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Publicar Nova Vaga</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditingJob(null);
+                  setJobTitleInput('');
+                  setJobDeptInput('');
+                  setJobSalaryInput('');
+                  setJobDescInput('');
+                  setShowJobModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Novo Cargo</span>
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

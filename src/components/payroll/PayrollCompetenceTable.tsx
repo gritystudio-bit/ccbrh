@@ -8,7 +8,14 @@ import {
   PayrollParameters,
   PayrollStatus,
 } from '../../types/database';
-import { analyzeEmployeeVacationCycles } from '../../utils/payrollCalculator';
+import {
+  analyzeEmployeeVacationCycles,
+  calculateIRRFBreakdown,
+} from '../../utils/payrollCalculator';
+import {
+  decomposePayrollEntryToS1200Items,
+  deriveMatricula,
+} from '../../utils/esocial/esocialS13Engine';
 import {
   AlertTriangle,
   Bus,
@@ -129,6 +136,17 @@ export const PayrollCompetenceTable: React.FC<PayrollCompetenceTableProps> = ({
         Number(entry.overtime_amount || 0) > 0;
       const isLei15270Exempt =
         !isPj && payrollParameters.apply_lei_15270 && Number(entry.irrf_amount || 0) === 0;
+      const irrfBreakdown = !isPj
+        ? calculateIRRFBreakdown(
+            Number(entry.gross_salary || 0) -
+              Number(entry.vacation_abono_amount || 0) -
+              Number(entry.vacation_double_amount || 0) -
+              Number(entry.thirteenth_amount || 0),
+            Number(entry.inss_amount || 0),
+            Number(entry.dependents_count || 0),
+            payrollParameters.apply_lei_15270
+          )
+        : { irrfBeforeReduction: 0, lei15270Reduction: 0, irrfAmount: 0 };
       const hasVacationAlert = Boolean(
         !isPj && vacCycleSummary && vacCycleSummary.expiredCycles.length > 0
       );
@@ -142,6 +160,7 @@ export const PayrollCompetenceTable: React.FC<PayrollCompetenceTableProps> = ({
         activeBenefitsCount,
         hasEvents,
         isLei15270Exempt,
+        irrfBreakdown,
         hasVacationAlert,
       };
     });
@@ -388,6 +407,7 @@ export const PayrollCompetenceTable: React.FC<PayrollCompetenceTableProps> = ({
                     vacCycleSummary,
                     hasVacationAlert,
                     isLei15270Exempt,
+                    irrfBreakdown,
                   } = row;
                   const isExpanded = expandedId === entry.id;
                   const currentEmpRegime = emp?.contract_type || 'clt';
@@ -659,225 +679,220 @@ export const PayrollCompetenceTable: React.FC<PayrollCompetenceTableProps> = ({
                         </td>
                       </tr>
 
-                      {/* Gaveta Expandida: Raio-X do Funcionário & Conformidade Legal */}
+                      {/* Gaveta Expandida: Espelho de Rubricas eSocial S-1.3 (S-1010 / S-1200 · Tabelas 03 e 21) */}
                       {isExpanded && (
                         <tr className="bg-slate-50/90 border-b border-slate-200">
-                          <td colSpan={6} className="p-4 sm:p-5">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
-                              {/* Coluna 1: Vínculo Cadastral & Benefícios do Perfil */}
-                              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                  <span className="font-bold text-[#082175] flex items-center gap-1.5">
-                                    <UserCheck className="w-4 h-4 text-[#9F8548]" />
-                                    Dados do Perfil & Benefícios Ativos
+                          <td colSpan={6} className="p-4 sm:p-5 space-y-4">
+                            {isPj ? (
+                              <div className="bg-white border border-purple-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
+                                <div>
+                                  <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-mono font-bold text-[10px]">
+                                    EFD-Reinf Série R-4000 · Prestador PJ (NFS-e)
                                   </span>
-                                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                                    Sincronizado
-                                  </span>
+                                  <p className="font-bold text-[#082175] mt-1">
+                                    {emp?.pj_company_name || emp?.full_name} (CNPJ:{' '}
+                                    {emp?.pj_cnpj || 'Não informado'})
+                                  </p>
+                                  <p className="text-[11px] text-slate-500">
+                                    Contrato B2B fora do S-1200 (RGPS). Valor autorizado para NFS-e:{' '}
+                                    <strong>{formatBRL(Number(entry.gross_salary))}</strong> ·
+                                    Status: <strong>{nfseBadge.label}</strong>
+                                  </p>
                                 </div>
-                                <div className="space-y-1.5 text-[11px] text-slate-600">
-                                  <div className="flex justify-between">
-                                    <span>Salário Contratual ({isPj ? 'Fee PJ' : 'CLT'}):</span>
-                                    <strong className="font-mono text-slate-900">
-                                      {formatBRL(contractualBase)}
-                                    </strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Admissão / Dependentes IRRF:</span>
-                                    <strong>
-                                      {formatDateBR(emp?.hire_date)} ·{' '}
-                                      {Number(entry.dependents_count || 0)} dep.
-                                    </strong>
-                                  </div>
-                                  {!isPj && (
-                                    <>
-                                      <div className="flex justify-between items-center pt-1 border-t border-slate-100">
-                                        <span className="inline-flex items-center gap-1">
-                                          <Bus className="w-3 h-3 text-[#082175]" />
-                                          Vale-Transporte (Lei 7.418/85 · teto 6%):
-                                        </span>
-                                        <strong className="font-mono text-rose-700">
-                                          {entry.vt_opted_in
-                                            ? `-${formatBRL(Number(entry.vt_discount_amount || 0))}`
-                                            : 'Não optante'}
-                                        </strong>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="inline-flex items-center gap-1">
-                                          <Utensils className="w-3 h-3 text-[#9F8548]" />
-                                          VR / VA (PAT · Dec. 10.854/21):
-                                        </span>
-                                        <strong className="font-mono text-rose-700">
-                                          -{formatBRL(Number(entry.vr_discount || 0))}
-                                        </strong>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="inline-flex items-center gap-1">
-                                          <HeartPulse className="w-3 h-3 text-emerald-600" />
-                                          Saúde / Outros (Art. 458 §5º CLT):
-                                        </span>
-                                        <strong className="font-mono text-rose-700">
-                                          -{formatBRL(Number(entry.other_discounts || 0))}
-                                        </strong>
-                                      </div>
-                                    </>
-                                  )}
+                                <div className="text-right font-mono">
+                                  <span className="text-[10px] text-slate-400 block">
+                                    Retenções ISS/IRRF/PCC
+                                  </span>
+                                  <strong className="text-rose-700">
+                                    -{formatBRL(Number(entry.total_discounts || 0))}
+                                  </strong>
                                 </div>
                               </div>
-
-                              {/* Coluna 2: Composição Legal de Proventos */}
-                              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                  <span className="font-bold text-[#082175] flex items-center gap-1.5">
-                                    <Calendar className="w-4 h-4 text-[#9F8548]" />
-                                    Memória de Proventos ({competence})
-                                  </span>
-                                  <span className="text-[10px] font-mono font-bold text-[#082175]">
-                                    Bruto: {formatBRL(Number(entry.gross_salary))}
-                                  </span>
-                                </div>
-                                <div className="space-y-1.5 text-[11px] text-slate-600">
-                                  <div className="flex justify-between">
-                                    <span>
-                                      Salário Proporcional ({entry.worked_days}/30 dias):
+                            ) : (
+                              <>
+                                {/* Barra de Vínculo S-2200 & Totalizadores de Retorno eSocial (S-5001, S-5002, S-5003) */}
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-xs">
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                                      <UserCheck className="w-3.5 h-3.5 text-[#082175]" />
+                                      Vínculo S-2200 · Cat. 101 CLT
                                     </span>
-                                    <strong className="font-mono">
-                                      {formatBRL(Number(entry.base_salary || 0))}
-                                    </strong>
+                                    <p className="font-mono font-bold text-[#082175]">
+                                      {emp ? deriveMatricula(emp) : 'MAT-001'} · Adm.{' '}
+                                      {formatDateBR(emp?.hire_date)}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500">
+                                      Sal. Contratual (<code className="font-mono">vrSalFx</code>):{' '}
+                                      <strong>{formatBRL(contractualBase)}</strong> ·{' '}
+                                      {Number(entry.dependents_count || 0)} dep. (Tab. 07)
+                                    </p>
                                   </div>
-                                  {vacationDays > 0 && (
-                                    <>
-                                      <div className="flex justify-between text-amber-900">
-                                        <span>
-                                          Férias Gozadas ({vacationDays}d) + 1/3 (Art. 7º XVII CF):
-                                        </span>
-                                        <strong className="font-mono">
-                                          {formatBRL(Number(entry.vacation_amount || 0))}
-                                        </strong>
-                                      </div>
-                                      {soldDays > 0 && (
-                                        <div className="flex justify-between text-emerald-800">
-                                          <span>
-                                            Abono Pecuniário Isento ({soldDays}d · Art. 143 CLT):
-                                          </span>
-                                          <strong className="font-mono">
-                                            {formatBRL(Number(entry.vacation_abono_amount || 0))}
-                                          </strong>
-                                        </div>
-                                      )}
-                                      {Number(entry.vacation_double_amount || 0) > 0 && (
-                                        <div className="flex justify-between text-rose-700">
-                                          <span>Dobra Art. 137 CLT (Prazo Concessivo):</span>
-                                          <strong className="font-mono">
-                                            {formatBRL(Number(entry.vacation_double_amount))}
-                                          </strong>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                  {(Number(entry.overtime_amount || 0) > 0 ||
-                                    Number(entry.dsr_amount || 0) > 0) && (
-                                    <div className="flex justify-between">
-                                      <span>Horas Extras + Reflexo DSR (Lei 605/49):</span>
-                                      <strong className="font-mono">
-                                        {formatBRL(
-                                          Number(entry.overtime_amount || 0) +
-                                            Number(entry.dsr_amount || 0)
-                                        )}
-                                      </strong>
-                                    </div>
-                                  )}
-                                  {(Number(entry.night_shift_amount || 0) > 0 ||
-                                    Number(entry.insalubrity_amount || 0) > 0 ||
-                                    Number(entry.hazard_amount || 0) > 0) && (
-                                    <div className="flex justify-between">
-                                      <span>Adicionais (Noturno / Insalub. / Pericul.):</span>
-                                      <strong className="font-mono">
-                                        {formatBRL(
-                                          Number(entry.night_shift_amount || 0) +
-                                            Number(entry.insalubrity_amount || 0) +
-                                            Number(entry.hazard_amount || 0)
-                                        )}
-                                      </strong>
-                                    </div>
-                                  )}
-                                  {Number(entry.thirteenth_amount || 0) > 0 && (
-                                    <div className="flex justify-between text-emerald-800">
-                                      <span>13º Salário (Lei 4.090/62):</span>
-                                      <strong className="font-mono">
-                                        {formatBRL(Number(entry.thirteenth_amount))}
-                                      </strong>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
 
-                              {/* Coluna 3: Conformidade Tributária & Encargos Patronais */}
-                              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                  <span className="font-bold text-[#082175] flex items-center gap-1.5">
-                                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                                    Tributos & Encargos Patronais
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-slate-500">
-                                    {isPj ? 'Regime NFS-e' : 'CLT · Portaria Vigente'}
-                                  </span>
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                                      S-5001 · Contribuição Previdenciária
+                                    </span>
+                                    <p className="font-mono font-bold text-rose-700">
+                                      Segurado (Nat. 9201): -{formatBRL(Number(entry.inss_amount))}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500">
+                                      CPP Patronal 20%:{' '}
+                                      <strong>
+                                        {formatBRL(Number(entry.inss_patronal_amount))}
+                                      </strong>
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                                      S-5002 · IRRF (S-1210 · CR 056107)
+                                    </span>
+                                    <p
+                                      className={`font-mono font-bold ${
+                                        Number(entry.irrf_amount || 0) === 0
+                                          ? 'text-emerald-700'
+                                          : 'text-rose-700'
+                                      }`}
+                                    >
+                                      {Number(entry.irrf_amount || 0) === 0
+                                        ? irrfBreakdown.lei15270Reduction > 0
+                                          ? `R$ 0,00 (Isento L15.270 · -${formatBRL(
+                                              irrfBreakdown.lei15270Reduction
+                                            )})`
+                                          : 'R$ 0,00 (Isento)'
+                                        : `Retido (Nat. 9203): -${formatBRL(
+                                            Number(entry.irrf_amount)
+                                          )}`}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500">
+                                      Tabela 21 Incid. IRRF · Subst. DIRF S-1.3
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                      S-5003 · FGTS Digital & Provisões
+                                    </span>
+                                    <p className="font-mono font-bold text-[#082175]">
+                                      FGTS 8% (codIncFGTS=11): {formatBRL(Number(entry.fgts_amount))}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500">
+                                      Prov. 13º + Férias:{' '}
+                                      <strong>
+                                        {formatBRL(
+                                          Number(entry.provision_13th || 0) +
+                                            Number(entry.provision_vacation || 0)
+                                        )}
+                                      </strong>
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="space-y-1.5 text-[11px] text-slate-600">
-                                  {!isPj ? (
-                                    <>
-                                      <div className="flex justify-between">
-                                        <span>INSS Progressivo (EC 103/2019):</span>
-                                        <strong className="font-mono text-rose-700">
-                                          -{formatBRL(Number(entry.inss_amount || 0))}
-                                        </strong>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>
-                                          IRRF Retido{' '}
-                                          {payrollParameters.apply_lei_15270
-                                            ? '(Lei 15.270/2025)'
-                                            : '(Tabela Padrão)'}
-                                          :
-                                        </span>
-                                        <strong className="font-mono text-rose-700">
-                                          -{formatBRL(Number(entry.irrf_amount || 0))}
-                                        </strong>
-                                      </div>
-                                      <div className="flex justify-between pt-1 border-t border-slate-100">
-                                        <span>FGTS 8% (Lei 8.036/1990):</span>
-                                        <strong className="font-mono text-[#082175]">
-                                          {formatBRL(Number(entry.fgts_amount || 0))}
-                                        </strong>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>INSS Patronal + Provisões (13º/Férias):</span>
-                                        <strong className="font-mono text-[#082175]">
-                                          {formatBRL(
-                                            Number(entry.inss_patronal_amount || 0) +
-                                              Number(entry.provision_13th || 0) +
-                                              Number(entry.provision_vacation || 0)
-                                          )}
-                                        </strong>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="flex justify-between">
-                                        <span>Status NFS-e:</span>
-                                        <strong>{nfseBadge.label}</strong>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>ISS / IRRF / PCC Retidos:</span>
-                                        <strong className="font-mono text-rose-700">
-                                          -{formatBRL(Number(entry.total_discounts || 0))}
-                                        </strong>
-                                      </div>
-                                    </>
-                                  )}
+
+                                {/* Tabela Analítica de Rubricas Padrão eSocial S-1.3 (S-1010 / S-1200) */}
+                                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                                  <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                    <span className="font-bold text-[#082175] flex items-center gap-1.5">
+                                      <Calendar className="w-3.5 h-3.5 text-[#9F8548]" />
+                                      Demonstrativo de Rubricas eSocial S-1.3 (Evento S-1200 ·
+                                      Grupo dmDev / itensRemun)
+                                    </span>
+                                    <span className="font-mono text-slate-500">
+                                      ideDmDev:{' '}
+                                      <strong>
+                                        DM-{competence.replace('-', '')}-
+                                        {emp ? deriveMatricula(emp) : 'MAT'}
+                                      </strong>{' '}
+                                      · Tab. Rubricas: <strong>TABRUB01</strong>
+                                    </span>
+                                  </div>
+
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-[11px]">
+                                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                                        <tr>
+                                          <th className="py-2 px-3 text-left font-semibold">
+                                            Cód. S-1010 (codRubr)
+                                          </th>
+                                          <th className="py-2 px-2.5 text-center font-semibold">
+                                            Nat. Tab. 03 (natRubr)
+                                          </th>
+                                          <th className="py-2 px-3 text-left font-semibold">
+                                            Descrição da Rubrica (dscRubr)
+                                          </th>
+                                          <th className="py-2 px-2.5 text-center font-semibold">
+                                            Ref.
+                                          </th>
+                                          <th className="py-2 px-2.5 text-center font-semibold">
+                                            Incidências (CP / IR Tab.21 / FGTS)
+                                          </th>
+                                          <th className="py-2 px-3 text-right font-semibold text-emerald-800">
+                                            1 · Vencimentos
+                                          </th>
+                                          <th className="py-2 px-3 text-right font-semibold text-rose-800">
+                                            2 · Descontos
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {decomposePayrollEntryToS1200Items(entry, 'TABRUB01', {
+                                          includeZeroIrrf: true,
+                                        }).map((item) => (
+                                          <tr key={item.codRubr} className="hover:bg-slate-50/70">
+                                            <td className="py-2 px-3 font-mono font-bold text-[#082175]">
+                                              {item.codRubr}
+                                            </td>
+                                            <td className="py-2 px-2.5 text-center">
+                                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono font-bold text-[10px]">
+                                                {item.natRubr}
+                                              </span>
+                                            </td>
+                                            <td className="py-2 px-3">
+                                              <span className="font-semibold text-slate-800">
+                                                {item.dscRubr}
+                                              </span>
+                                              <span className="text-[10px] text-slate-400 block">
+                                                {item.natRubrDesc}
+                                              </span>
+                                            </td>
+                                            <td className="py-2 px-2.5 text-center font-mono text-slate-600">
+                                              {item.refLabel}
+                                            </td>
+                                            <td className="py-2 px-2.5 text-center font-mono text-[10px] text-slate-500">
+                                              CP:{item.codIncCP} · IR:{item.codIncIRRF} · FGTS:
+                                              {item.codIncFGTS}
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                                              {item.tpRubr === 1 ? formatBRL(item.vrRubr) : '-'}
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono font-bold text-rose-700">
+                                              {item.tpRubr === 2
+                                                ? item.vrRubr === 0
+                                                  ? 'R$ 0,00 (Isento)'
+                                                  : `-${formatBRL(item.vrRubr)}`
+                                                : '-'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                      <tfoot className="bg-slate-50 border-t border-slate-200 font-mono font-bold text-xs">
+                                        <tr>
+                                          <td colSpan={5} className="py-2.5 px-3 text-right text-slate-600">
+                                            Totais do Demonstrativo (REGRA_DEMONSTRATIVO) →
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right text-emerald-800">
+                                            {formatBRL(Number(entry.gross_salary))}
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right text-rose-800">
+                                            -{formatBRL(Number(entry.total_discounts))}
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
+                              </>
+                            )}
                           </td>
                         </tr>
                       )}

@@ -1,15 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCcb } from '../context/CcbContext';
 import {
   EmployeeContractType,
   PayrollEntry,
 } from '../types/database';
 import { exportPayrollToExcel } from '../utils/payrollExport';
+import { getPayrollRules } from '../utils/payrollCalculator';
 import { PayrollSummaryKpis } from './payroll/PayrollSummaryKpis';
 import { PayrollCompetenceTable } from './payroll/PayrollCompetenceTable';
 import { PayrollSettingsModal } from './payroll/PayrollSettingsModal';
 import { PayrollEntryModal } from './payroll/PayrollEntryModal';
 import { PayslipPreviewModal } from './payroll/PayslipPreviewModal';
+import { ModuleBanner } from './ui/ModuleBanner';
 import {
   AlertCircle,
   Calendar,
@@ -111,6 +113,26 @@ export const PayrollModule: React.FC = () => {
     [payrollEntries, competence]
   );
 
+  const autoSyncedCompetencesRef = useRef<Set<string>>(new Set());
+
+  // Auto-sincroniza rascunhos gerados antes da Lei 15.270/2025 caso haja IRRF retido abaixo do teto de isenção
+  useEffect(() => {
+    if (!currentPayrollParameters.apply_lei_15270 || syncingDrafts) return;
+    const exemptionLimit = getPayrollRules().irrf_lei_15270_reduction.full_exemption_limit;
+    const hasStaleLei15270Draft = payrollEntries.some(
+      (p) =>
+        p.competence === competence &&
+        p.status === 'draft' &&
+        (p.contract_type || 'clt') === 'clt' &&
+        Number(p.gross_salary || 0) <= exemptionLimit &&
+        Number(p.irrf_amount || 0) > 0
+    );
+    if (hasStaleLei15270Draft && !autoSyncedCompetencesRef.current.has(competence)) {
+      autoSyncedCompetencesRef.current.add(competence);
+      void syncDraftPayroll(competence);
+    }
+  }, [competence, currentPayrollParameters.apply_lei_15270, payrollEntries, syncDraftPayroll, syncingDrafts]);
+
   const handleSyncDrafts = async () => {
     setSyncingDrafts(true);
     setFeedback(null);
@@ -194,84 +216,86 @@ export const PayrollModule: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#9F8548] tracking-wide">
-            Departamento Pessoal · PF (CLT + Lei 15.270/2025) & PJ (NFS-e)
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#082175] tracking-tight mt-1">
-            Folha de Pagamento & Fechamento PJ
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+      <ModuleBanner
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-[#f5a90e] text-[10px] font-bold">
+            <span>Departamento Pessoal · PF (CLT + Lei 15.270/2025) & PJ (NFS-e)</span>
+          </span>
+        }
+        title="Folha de Pagamento & Fechamento PJ"
+        subtitle={
+          <>
             Regras trabalhistas e fiscais centralizadas para{' '}
-            <strong>{currentCompany?.name || 'Empresa'}</strong>. Isenção de IRRF até R$ 5.000,00 ativa.
-          </p>
-        </div>
+            <strong className="text-white">{currentCompany?.name || 'Empresa'}</strong>. Isenção de
+            IRRF até R$ 5.000,00 ativa.
+          </>
+        }
+        actions={
+          <>
+            <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-xs">
+              <Calendar className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span className="text-slate-200 font-medium">Competência:</span>
+              <input
+                type="month"
+                value={competence}
+                onChange={(e) => setCompetence(e.target.value)}
+                className="bg-transparent font-bold text-white outline-none [color-scheme:dark]"
+              />
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
-            <Calendar className="w-3.5 h-3.5 text-[#082175]" />
-            <span className="text-slate-500 font-medium">Competência:</span>
-            <input
-              type="month"
-              value={competence}
-              onChange={(e) => setCompetence(e.target.value)}
-              className="bg-transparent font-bold text-[#082175] outline-none"
-            />
-          </div>
-
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#082175]/30 bg-[#E0F4F7]/50 hover:bg-[#E0F4F7] text-[#082175] font-semibold text-xs transition-colors"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-            <span>Parâmetros PF & PJ</span>
-          </button>
-
-          <button
-            onClick={handleExportExcel}
-            disabled={entriesForCompetence.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs transition-colors disabled:opacity-50"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Excel (.xlsx)</span>
-          </button>
-
-          <button
-            onClick={handleGeneratePayroll}
-            disabled={generating || employees.length === 0}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#082175] hover:bg-[#0a2a8a] text-white font-semibold text-xs shadow-xs transition-colors disabled:opacity-60"
-          >
-            {generating ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <FileText className="w-3.5 h-3.5 text-[#f5a90e]" />
-            )}
-            <span>{generating ? 'Calculando...' : 'Gerar Competência'}</span>
-          </button>
-
-          {draftCountForCompetence > 0 && (
             <button
-              onClick={handleSyncDrafts}
-              disabled={syncingDrafts}
-              title="Recalcula os lançamentos em rascunho conforme o regime atual (CLT/PJ) e parâmetros vigentes"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition-colors disabled:opacity-60"
+              onClick={() => setShowSettingsModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-colors cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncingDrafts ? 'animate-spin' : ''}`} />
-              <span>{syncingDrafts ? 'Sincronizando...' : 'Recalcular Rascunhos'}</span>
+              <Settings2 className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span>Parâmetros PF & PJ</span>
             </button>
-          )}
 
-          <button
-            onClick={() => setEditingEmployeeId(employees[0]?.id || '')}
-            disabled={employees.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-[#082175] font-semibold text-xs transition-colors disabled:opacity-50"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Lançar Individual</span>
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={handleExportExcel}
+              disabled={entriesForCompetence.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300/40 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Excel (.xlsx)</span>
+            </button>
+
+            <button
+              onClick={handleGeneratePayroll}
+              disabled={generating || employees.length === 0}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#f5a90e] hover:bg-[#e59b05] text-[#082175] font-extrabold text-xs shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              {generating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileText className="w-3.5 h-3.5" />
+              )}
+              <span>{generating ? 'Calculando...' : 'Gerar Competência'}</span>
+            </button>
+
+            {draftCountForCompetence > 0 && (
+              <button
+                onClick={handleSyncDrafts}
+                disabled={syncingDrafts}
+                title="Recalcula os lançamentos em rascunho conforme o regime atual (CLT/PJ) e parâmetros vigentes"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300/40 bg-amber-400/20 hover:bg-amber-400/30 text-amber-100 font-semibold text-xs transition-colors disabled:opacity-60 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingDrafts ? 'animate-spin' : ''}`} />
+                <span>{syncingDrafts ? 'Sincronizando...' : 'Recalcular Rascunhos'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setEditingEmployeeId(employees[0]?.id || '')}
+              disabled={employees.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#f5a90e]" />
+              <span>Lançar Individual</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Resumo de Parâmetros Ativos & Filtros */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
