@@ -13,6 +13,7 @@ import {
   Calculator,
   Scale,
   Settings,
+  LifeBuoy,
   LogOut,
   Menu,
   X,
@@ -27,7 +28,8 @@ export type ActiveTab =
   | 'payroll'
   | 'legal'
   | 'portal'
-  | 'settings';
+  | 'settings'
+  | 'support';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -129,6 +131,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           id: 'settings',
           label: 'Configurações',
           icon: Settings,
+        },
+        {
+          id: 'support',
+          label: 'Suporte',
+          icon: LifeBuoy,
         },
       ],
     },

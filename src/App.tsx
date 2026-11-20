@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { CcbProvider, useCcb } from './context/CcbContext';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
@@ -10,13 +10,19 @@ import { EmployeeProfileView } from './components/employees/EmployeeProfileView'
 import { PayrollModule } from './components/PayrollModule';
 import { LegalConsultationModule } from './components/legal/LegalConsultationModule';
 import { SettingsModule } from './components/settings/SettingsModule';
+import { SupportView } from './components/support/SupportView';
 import { CandidatePortalModule } from './components/CandidatePortalModule';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
 import { CompanyRegistrationPage } from './components/CompanyRegistrationPage';
 import { TalentRegistrationPage } from './components/TalentRegistrationPage';
 import { PublicVacanciesPage } from './components/PublicVacanciesPage';
-import { AlertTriangle, ArrowLeft, Loader2, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
+import { isAdminPathname } from './admin/routeUtils';
+import { getMaintenanceStatus } from './admin/services/adminService';
+import type { MaintenanceStatus } from './admin/types';
+import { AlertTriangle, ArrowLeft, Loader2, LogOut, RefreshCw, ShieldCheck, Wrench } from 'lucide-react';
+
+const AdminApp = lazy(() => import('./admin/AdminApp'));
 
 type AppView =
   | 'landing'
@@ -333,7 +339,10 @@ function CcbrhMain() {
             <Loader2 className="w-8 h-8 animate-spin text-[#082175]" />
             <span className="text-sm font-medium">Carregando informações da empresa...</span>
           </div>
-        ) : !currentCompany && activeTab !== 'companies' && activeTab !== 'settings' ? (
+        ) : !currentCompany &&
+          activeTab !== 'companies' &&
+          activeTab !== 'settings' &&
+          activeTab !== 'support' ? (
           <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-3">
             <p className="text-base font-bold text-[#082175]">Nenhuma empresa cliente cadastrada</p>
             <p className="text-xs text-slate-500">
@@ -368,6 +377,7 @@ function CcbrhMain() {
             {activeTab === 'payroll' && <PayrollModule />}
             {activeTab === 'legal' && <LegalConsultationModule />}
             {activeTab === 'settings' && <SettingsModule />}
+            {activeTab === 'support' && <SupportView />}
             {activeTab === 'portal' && (
               <CandidatePortalModule initialToken={targetCandidateToken} />
             )}
@@ -400,7 +410,100 @@ function CcbrhMain() {
   );
 }
 
+function MaintenanceScreen({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-sm p-8 text-center space-y-5">
+        <div className="w-14 h-14 rounded-2xl bg-[#082175] text-[#f5a90e] flex items-center justify-center mx-auto">
+          <Wrench className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#9F8548]">
+            Manutenção Programada · ccbrh
+          </p>
+          <h1 className="text-2xl font-extrabold text-[#082175]">
+            Estamos atualizando a plataforma
+          </h1>
+          <p className="text-sm text-slate-600 leading-relaxed">{message}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#082175] hover:bg-[#0a2a8a] text-white text-xs font-bold cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4 text-[#f5a90e]" />
+            <span>Verificar novamente</span>
+          </button>
+          <a
+            href="/admin"
+            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:text-[#082175]"
+          >
+            <ShieldCheck className="w-4 h-4 text-[#9F8548]" />
+            <span>Acesso Administrativo</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const [pathname, setPathname] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.pathname : '/'
+  );
+  const [maintenance, setMaintenance] = useState<MaintenanceStatus>({
+    enabled: false,
+    message: null,
+    updated_at: null,
+  });
+
+  useEffect(() => {
+    const handlePopState = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const isAdminRoute = isAdminPathname(pathname);
+
+  useEffect(() => {
+    if (isAdminRoute) return;
+    let active = true;
+    void getMaintenanceStatus().then((status) => {
+      if (active) setMaintenance(status);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isAdminRoute]);
+
+  // Portal Administrativo (/admin e /admin/*) carregado via React.lazy e isolado do app principal/manutenção
+  if (isAdminRoute) {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col items-center justify-center gap-3 font-sans">
+            <Loader2 className="w-8 h-8 animate-spin text-[#f5a90e]" />
+            <p className="text-sm font-medium">Carregando Portal Administrativo...</p>
+          </div>
+        }
+      >
+        <AdminApp />
+      </Suspense>
+    );
+  }
+
+  if (maintenance.enabled) {
+    return (
+      <MaintenanceScreen
+        message={
+          maintenance.message ||
+          'Estamos realizando uma manutenção programada para melhorar a plataforma CCBRH. Voltamos em breve.'
+        }
+      />
+    );
+  }
+
   return (
     <CcbProvider>
       <CcbrhMain />
