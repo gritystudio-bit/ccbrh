@@ -5,9 +5,19 @@ import {
   DocumentStatus,
   DocumentType,
   Employee,
+  EmployeeBenefitRecord,
+  EmployeeBenefitStatus,
+  EmployeeVacationRecord,
+  EmployeeVacationStatus,
   Job,
   PayrollEntry,
+  PayrollParameters,
 } from '../../types/database';
+import type {
+  CreateEmployeeBenefitInput,
+  CreateEmployeeVacationInput,
+} from '../../context/services/employeeHrService';
+import { analyzeEmployeeVacationCycles } from '../../utils/payrollCalculator';
 import { processAvatarImageFile } from '../../utils/avatarImage';
 import { EmployeePersonalSection } from './EmployeePersonalSection';
 import {
@@ -20,6 +30,8 @@ import {
   EmployeeAccessGrantModal,
   EmployeePayslipsTab,
 } from './EmployeePayslipsTab';
+import { EmployeeVacationsTab } from './EmployeeVacationsTab';
+import { EmployeeBenefitsTab } from './EmployeeBenefitsTab';
 import {
   ArrowLeft,
   ArrowUp,
@@ -30,9 +42,11 @@ import {
   EyeOff,
   FileEdit,
   FileSpreadsheet,
+  Gift,
   Home,
   KeyRound,
   Loader2,
+  Palmtree,
   Paperclip,
   Pencil,
   Trash2,
@@ -45,6 +59,8 @@ export type EmployeeProfileTab =
   | 'address'
   | 'dependents'
   | 'additional'
+  | 'vacations'
+  | 'benefits'
   | 'payslips'
   | 'documents';
 
@@ -54,6 +70,9 @@ interface EmployeeProfileViewProps {
   manager?: Employee;
   documents: DocumentRecord[];
   payrollEntries?: PayrollEntry[];
+  vacations?: EmployeeVacationRecord[];
+  benefits?: EmployeeBenefitRecord[];
+  payrollParameters?: PayrollParameters;
   company?: Company | null;
   isSelfServiceView?: boolean;
   onBack: () => void;
@@ -63,6 +82,23 @@ interface EmployeeProfileViewProps {
   onUpdateDocumentStatus: (docId: string, status: DocumentStatus) => Promise<void>;
   onDeleteDocument: (docId: string, storagePath: string) => Promise<void>;
   onOpenDocument: (storagePath: string) => Promise<void>;
+  onCreateVacation?: (input: CreateEmployeeVacationInput) => Promise<EmployeeVacationRecord>;
+  onUpdateVacation?: (
+    vacationId: string,
+    patch: Partial<
+      Omit<EmployeeVacationRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeVacationStatus }
+  ) => Promise<EmployeeVacationRecord>;
+  onDeleteVacation?: (vacationId: string) => Promise<void>;
+  onLaunchVacationToPayroll?: (vacationId: string) => Promise<PayrollEntry>;
+  onCreateBenefit?: (input: CreateEmployeeBenefitInput) => Promise<EmployeeBenefitRecord>;
+  onUpdateBenefit?: (
+    benefitId: string,
+    patch: Partial<
+      Omit<EmployeeBenefitRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeBenefitStatus }
+  ) => Promise<EmployeeBenefitRecord>;
+  onDeleteBenefit?: (benefitId: string, employeeId: string) => Promise<void>;
 }
 
 const formatLongDateBR = (iso?: string | null) => {
@@ -93,6 +129,9 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({
   manager,
   documents,
   payrollEntries = [],
+  vacations = [],
+  benefits = [],
+  payrollParameters,
   company = null,
   isSelfServiceView = false,
   onBack,
@@ -102,6 +141,13 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({
   onUpdateDocumentStatus,
   onDeleteDocument,
   onOpenDocument,
+  onCreateVacation,
+  onUpdateVacation,
+  onDeleteVacation,
+  onLaunchVacationToPayroll,
+  onCreateBenefit,
+  onUpdateBenefit,
+  onDeleteBenefit,
 }) => {
   const [activeTab, setActiveTab] = useState<EmployeeProfileTab>('personal');
   const [showSalary, setShowSalary] = useState(false);
@@ -112,6 +158,15 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({
 
   const avatarUrl = employee.personal_info?.avatar_url || null;
   const employeePayslips = payrollEntries.filter((p) => p.employee_id === employee.id);
+  const employeeVacations = vacations.filter((v) => v.employee_id === employee.id);
+  const employeeBenefits = benefits.filter((b) => b.employee_id === employee.id);
+  const activeBenefitsCount = employeeBenefits.filter((b) => b.status === 'active').length;
+  const vacationSummary = analyzeEmployeeVacationCycles({
+    employee,
+    competence: new Date().toISOString().slice(0, 7),
+    existingEntries: employeePayslips,
+    vacationRecords: employeeVacations,
+  });
 
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,6 +248,18 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({
       badge: (employee.dependents_list || []).length || employee.dependents_count || 0,
     },
     { id: 'additional', label: 'ADICIONAIS', icon: FileEdit },
+    {
+      id: 'vacations',
+      label: 'FÉRIAS',
+      icon: Palmtree,
+      badge: vacationSummary.totalOpenPeriodsCount,
+    },
+    {
+      id: 'benefits',
+      label: 'MEUS BENEFÍCIOS',
+      icon: Gift,
+      badge: activeBenefitsCount,
+    },
     {
       id: 'payslips',
       label: 'RECIBOS & HOLERITES',
@@ -542,6 +609,54 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({
             <EmployeeAdditionalTab
               employee={employee}
               onSaveEmployeePatch={handlePatchWithFeedback}
+            />
+          )}
+
+          {activeTab === 'vacations' && (
+            <EmployeeVacationsTab
+              employee={employee}
+              job={job}
+              manager={manager}
+              company={company}
+              vacations={employeeVacations}
+              payrollEntries={employeePayslips}
+              payrollParameters={payrollParameters}
+              isSelfServiceView={isSelfServiceView}
+              onSaveEmployeePatch={handlePatchWithFeedback}
+              onCreateVacation={async (input) => {
+                if (!onCreateVacation) {
+                  throw new Error('Serviço de férias indisponível.');
+                }
+                return onCreateVacation(input);
+              }}
+              onUpdateVacation={async (id, patch) => {
+                if (!onUpdateVacation) {
+                  throw new Error('Serviço de férias indisponível.');
+                }
+                return onUpdateVacation(id, patch);
+              }}
+              onDeleteVacation={async (id) => {
+                if (!onDeleteVacation) {
+                  throw new Error('Serviço de férias indisponível.');
+                }
+                return onDeleteVacation(id);
+              }}
+              onLaunchToPayroll={async (id) => {
+                if (!onLaunchVacationToPayroll) {
+                  throw new Error('Integração com a Folha indisponível.');
+                }
+                return onLaunchVacationToPayroll(id);
+              }}
+            />
+          )}
+
+          {activeTab === 'benefits' && (
+            <EmployeeBenefitsTab
+              employee={employee}
+              job={job}
+              company={company}
+              benefits={employeeBenefits}
+              payrollParameters={payrollParameters}
             />
           )}
 

@@ -8,15 +8,20 @@
 # ==============================================================================
 
 meta:
-  version: "2026.2"
+  version: "2026.3"
   effective_from: "2026-01-01"
   legal_basis:
-    - "Decreto-Lei nº 5.452/1943 (CLT - Jornada, Férias Arts. 129-145, Licenças Art. 473)"
-    - "Lei nº 13.467/2017 (Reforma Trabalhista - Fracionamento de Férias Art. 134 §1º)"
-    - "Lei nº 15.270/2025 (Isenção IRPF até R$ 5.000 Mensal e no 13º Salário - Arts. 2º e 3º)"
+    - "CF/88 Art. 7º XVII (Gozo de férias anuais remuneradas com 1/3 a mais)"
+    - "Decreto-Lei nº 5.452/1943 (CLT - Jornada, Férias Arts. 129-149, Teletrabalho Art. 75-D, Auxílio-Creche Art. 389 §1º, Salário-Utilidade Arts. 457-458, Licenças Art. 473)"
+    - "Lei nº 13.467/2017 (Reforma Trabalhista - Fracionamento de Férias Art. 134 §1º e §3º, Art. 457 §2º e Art. 458 §5º)"
+    - "Lei nº 15.270/2025 (Isenção IRPF até R$ 5.000,00 e redução até R$ 7.350,00 - Arts. 2º e 3º)"
     - "Decreto nº 9.580/2018 (RIR/2018 - Regulamento do Imposto sobre a Renda PF e PJ)"
-    - "Lei nº 8.213/1991 (Benefícios Previdenciários - Afastamentos INSS e Salário-Maternidade)"
-    - "Lei nº 7.418/1985 (Vale-Transporte)"
+    - "Lei nº 8.212/1991 Art. 28 §9º e Lei nº 8.213/1991 (Previdência Social - Incidências, Afastamentos e Salário-Maternidade)"
+    - "Lei nº 8.036/1990 (FGTS - Base de cálculo e afastamento acidentário Art. 15 §5º)"
+    - "Lei nº 4.090/1962 e Lei nº 4.749/1965 (13º Salário e adiantamento nas férias)"
+    - "Lei nº 7.418/1985 (Vale-Transporte - Teto de 6% limitado ao custo efetivo)"
+    - "Lei nº 6.321/1976, Decreto nº 10.854/2021 e Lei nº 14.442/2022 (PAT - Programa de Alimentação do Trabalhador)"
+    - "Lei nº 14.457/2022 (Programa Emprega + Mulheres - Reembolso-Creche até 5 anos e 11 meses)"
 
 clt_defaults:
   minimum_wage: 1621.00
@@ -37,7 +42,7 @@ clt_defaults:
   simplified_irrf_discount: 607.20
 
 vacation_rules:
-  legal_reference: "Arts. 129 a 145 da CLT + Art. 134 §1º da Lei nº 13.467/2017"
+  legal_reference: "Arts. 129 a 149 da CLT + Art. 134 §§ 1º e 3º da Lei nº 13.467/2017 + Art. 7º XVII CF/88"
   standard_vacation_days: 30
   concessive_period_months: 12      # Art. 134 CLT: 12 meses subsequentes ao período aquisitivo
   expired_concessive_double_pay: true # Art. 137 CLT: férias após o prazo concessivo são pagas em dobro
@@ -46,6 +51,12 @@ vacation_rules:
   max_split_periods: 3              # Fracionamento em até 3 períodos (Reforma Trabalhista)
   min_first_split_days: 14          # 1º período não pode ser inferior a 14 dias corridos
   min_other_split_days: 5           # Demais períodos não podem ser inferiores a 5 dias corridos cada
+  notice_min_days: 30               # Art. 135 CLT: comunicação por escrito com antecedência mínima de 30 dias
+  payment_before_start_days: 2      # Art. 145 CLT: pagamento até 2 dias antes do início do gozo
+  abono_request_before_acquisitive_end_days: 15 # Art. 143 §1º CLT: requerimento até 15 dias antes do término do período aquisitivo
+  forbid_start_days_before_holiday_or_dsr: 2    # Art. 134 §3º CLT: vedado início nos 2 dias que antecedem feriado ou DSR
+  collective_min_days: 10           # Art. 139 §1º CLT: férias coletivas em até 2 períodos >= 10 dias
+  pro_rata_min_days_for_month: 15   # Art. 146 parágrafo único CLT: fração > 14 dias (15+ dias) conta 1/12 avo
   absence_reduction_scale:          # Art. 130 da CLT (Proporção de férias conforme faltas injustificadas)
     - max_absences: 5
       entitled_days: 30
@@ -55,6 +66,13 @@ vacation_rules:
       entitled_days: 18
     - max_absences: 32
       entitled_days: 12
+
+benefit_rules:
+  legal_reference: "Arts. 457 §2º, 458 §2º/§5º, 75-D e 389 §1º CLT + Lei 7.418/1985 + Lei 6.321/1976 + Lei 14.442/2022 + Decreto 10.854/2021 + Lei 14.457/2022"
+  vt_cap_by_actual_cost: true       # Lei 7.418/85 Art. 4º parágrafo único: desconto limitado a 6% ou ao valor efetivo pago
+  pat_employee_discount_cap_rate: 0.20 # Decreto 10.854/2021 Art. 174: participação do trabalhador no PAT limitada a 20% do custo direto da refeição
+  childcare_max_age_months: 71      # Lei 14.457/2022: reembolso-creche para filhos até 5 anos e 11 meses (71 meses)
+  allow_cash_meal_allowance: false  # Art. 457 §2º CLT / Lei 14.442/2022: vedado pagamento de auxílio-alimentação em dinheiro
 
 leave_rules:
   legal_reference: "Arts. 392, 473 e 476 da CLT + Arts. 60 e 72 da Lei nº 8.213/1991"

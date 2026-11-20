@@ -26,30 +26,60 @@ import {
   type VacationCyclePeriod,
   type VacationCycleStatus,
 } from './payroll/vacationCycles';
+import {
+  calculateEndDateIso,
+  checkArt134Par3StartDate,
+  estimateVacationFinancials,
+  subtractDaysIso,
+  validateVacationRequest,
+  type VacationFinancialEstimate,
+  type VacationValidationResult,
+} from './payroll/vacationValidation';
+import {
+  BENEFIT_TYPE_CATALOG,
+  calculateSingleBenefitMonthlyImpact,
+  summarizeEmployeeBenefits,
+  type BenefitCatalogMeta,
+  type EmployeeBenefitsSummary,
+  type SingleBenefitMonthlyImpact,
+} from './payroll/benefitsCalculator';
 
 export type {
+  BenefitCatalogMeta,
   CompetenceEligibilityResult,
+  EmployeeBenefitsSummary,
   EmployeeVacationSummary,
   IrrfBreakdownResult,
   PayrollCalculationInput,
   PayrollCalculationResult,
   PayrollRulesConfig,
+  SingleBenefitMonthlyImpact,
   VacationCyclePeriod,
   VacationCycleStatus,
+  VacationFinancialEstimate,
+  VacationValidationResult,
 };
 
 export {
+  BENEFIT_TYPE_CATALOG,
   analyzeEmployeeVacationCycles,
   buildDefaultCompanyPayrollParameters,
   calculateCltPayroll,
+  calculateEndDateIso,
   calculateIRRF,
   calculateIRRFBreakdown,
   calculatePjPayment,
   calculateProgressiveINSS,
+  calculateSingleBenefitMonthlyImpact,
   calculateWorkedDaysForCompetence,
+  checkArt134Par3StartDate,
+  estimateVacationFinancials,
   formatIsoDateBR,
   getEntitledVacationDaysByAbsences,
   getPayrollRules,
+  subtractDaysIso,
+  summarizeEmployeeBenefits,
+  validateVacationRequest,
 };
 
 /**

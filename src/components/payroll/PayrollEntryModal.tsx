@@ -114,7 +114,7 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const { refreshDatabase } = useCcb();
+  const { refreshDatabase, employeeVacations, employeeBenefits } = useCcb();
   const initialEmp = employees.find((e) => e.id === employeeId);
   const initialExisting = existingEntries.find(
     (p) => p.employee_id === employeeId && p.competence === competence
@@ -222,6 +222,19 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
     selectedEmployee?.resignation_date
   );
 
+  const selectedVtEmployerValue = useMemo(() => {
+    if (!selectedEmployee || contractType === 'pj') return 0;
+    const activeVt = employeeBenefits
+      .filter(
+        (b) =>
+          b.employee_id === selectedEmployee.id &&
+          b.status === 'active' &&
+          b.benefit_type === 'vale_transporte'
+      )
+      .reduce((acc, b) => acc + Number(b.monthly_employer_value || 0), 0);
+    return activeVt > 0 ? activeVt : Number(initialExisting?.vt_employer_value ?? 0);
+  }, [selectedEmployee, contractType, employeeBenefits, initialExisting]);
+
   const preview = useMemo(
     () =>
       calculatePayrollByContractType(contractType, {
@@ -236,6 +249,7 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
         bonuses,
         absenceDays: absences,
         vtOptedIn,
+        vtEmployerValue: selectedVtEmployerValue,
         vrDiscount,
         otherDiscounts,
         vacationDays,
@@ -271,6 +285,7 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
       bonuses,
       absences,
       vtOptedIn,
+      selectedVtEmployerValue,
       vrDiscount,
       otherDiscounts,
       vacationDays,
@@ -290,9 +305,16 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
         competence,
         entitledDaysPerCycle: preview.entitledVacationDaysByAbsences,
         existingEntries,
+        vacationRecords: employeeVacations,
         excludeCompetence: competence,
       }),
-    [selectedEmployee, competence, preview.entitledVacationDaysByAbsences, existingEntries]
+    [
+      selectedEmployee,
+      competence,
+      preview.entitledVacationDaysByAbsences,
+      existingEntries,
+      employeeVacations,
+    ]
   );
 
   const handleChangeEmployee = (newEmpId: string) => {
@@ -433,6 +455,7 @@ export const PayrollEntryModal: React.FC<PayrollEntryModalProps> = ({
         bonuses,
         absenceDays: absences,
         vtOptedIn,
+        vtEmployerValue: isPj ? 0 : selectedVtEmployerValue,
         vrDiscount,
         otherDiscounts,
         vacationDays: isPj ? 0 : vacationDays,

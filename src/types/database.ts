@@ -311,6 +311,7 @@ export interface PayrollEntry {
   bonuses: number;
   absence_days: number;
   vt_opted_in: boolean;
+  vt_employer_value?: number;
   vr_discount: number;
   other_discounts: number;
   vacation_days?: number;
@@ -390,6 +391,92 @@ export interface ContactLead {
   created_at: string;
 }
 
+export type EmployeeVacationStatus =
+  | 'requested'
+  | 'approved'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'canceled'
+  | 'rejected';
+
+export interface EmployeeVacationRecord {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  acquisitive_period_label: string;
+  acquisitive_start: string;
+  acquisitive_end: string;
+  concessive_limit: string;
+  start_date: string;
+  end_date: string;
+  days_taken: number;
+  sold_days: number;
+  doubled_days: number;
+  fraction_number: number;
+  unjustified_absences: number;
+  notice_date?: string | null;
+  payment_due_date?: string | null;
+  competence?: string | null;
+  payroll_entry_id?: string | null;
+  advance_13th_requested: boolean;
+  status: EmployeeVacationStatus;
+  estimated_gross_amount: number;
+  estimated_third_amount: number;
+  estimated_abono_amount: number;
+  estimated_double_amount: number;
+  notes?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmployeeBenefitType =
+  | 'vale_transporte'
+  | 'vale_refeicao'
+  | 'vale_alimentacao'
+  | 'plano_saude'
+  | 'plano_odontologico'
+  | 'auxilio_creche'
+  | 'auxilio_home_office'
+  | 'seguro_vida'
+  | 'previdencia_privada'
+  | 'vale_cultura'
+  | 'auxilio_educacao'
+  | 'outros';
+
+export type EmployeeBenefitDiscountMode =
+  | 'none'
+  | 'fixed'
+  | 'percent_salary'
+  | 'percent_benefit';
+
+export type EmployeeBenefitStatus = 'active' | 'suspended' | 'canceled';
+
+export interface EmployeeBenefitRecord {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  benefit_type: EmployeeBenefitType;
+  provider_name?: string | null;
+  plan_name?: string | null;
+  card_or_policy_number?: string | null;
+  monthly_employer_value: number;
+  employee_discount_mode: EmployeeBenefitDiscountMode;
+  employee_discount_value: number;
+  coparticipation_value: number;
+  dependents_covered: number;
+  include_in_payroll: boolean;
+  is_taxable: boolean;
+  status: EmployeeBenefitStatus;
+  start_date: string;
+  end_date?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CcbDatabase {
   companies: Company[];
   branches: CompanyBranch[];
@@ -400,6 +487,8 @@ export interface CcbDatabase {
   documents: DocumentRecord[];
   payrollEntries: PayrollEntry[];
   payrollParameters: PayrollParameters[];
+  employeeVacations: EmployeeVacationRecord[];
+  employeeBenefits: EmployeeBenefitRecord[];
   talentBank: TalentBankEntry[];
   contactLeads: ContactLead[];
 }

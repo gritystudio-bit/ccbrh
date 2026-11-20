@@ -43,12 +43,14 @@ function CcbrhMain() {
     refreshDatabase,
     logout,
     database,
+    currentPayrollParameters,
     setCurrentTenantId,
     updateEmployee,
     uploadEmployeeDocument,
     updateDocumentStatus,
     deleteDocument,
     getDocumentSignedUrl,
+    addEmployeeVacation,
   } = useCcb();
 
   const [view, setView] = useState<AppView>(() => {
@@ -234,6 +236,12 @@ function CcbrhMain() {
     const empPayslips = database.payrollEntries.filter(
       (p) => p.employee_id === selfServiceEmployee.id
     );
+    const empVacations = database.employeeVacations.filter(
+      (v) => v.employee_id === selfServiceEmployee.id
+    );
+    const empBenefits = database.employeeBenefits.filter(
+      (b) => b.employee_id === selfServiceEmployee.id
+    );
 
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
@@ -275,6 +283,9 @@ function CcbrhMain() {
             manager={empManager}
             documents={empDocs}
             payrollEntries={empPayslips}
+            vacations={empVacations}
+            benefits={empBenefits}
+            payrollParameters={currentPayrollParameters}
             company={empCompany}
             isSelfServiceView
             onBack={() => {}}
@@ -291,6 +302,7 @@ function CcbrhMain() {
               const url = await getDocumentSignedUrl(storagePath);
               if (url) window.open(url, '_blank', 'noopener,noreferrer');
             }}
+            onCreateVacation={addEmployeeVacation}
           />
         </main>
       </div>

@@ -13,6 +13,7 @@ export interface PayrollCalculationInput {
   bonuses?: number;
   absenceDays?: number;
   vtOptedIn?: boolean;
+  vtEmployerValue?: number;
   vrDiscount?: number;
   otherDiscounts?: number;
   // Eventos de Férias (Arts. 129 a 145 CLT + Reforma Trabalhista Lei 13.467/2017)
@@ -192,6 +193,7 @@ export function calculateCltPayroll(input: PayrollCalculationInput): PayrollCalc
   const bonuses = Math.max(0, Number(input.bonuses ?? 0));
   const absenceDays = Math.min(31, Math.max(0, Number(input.absenceDays ?? 0)));
   const vtOptedIn = input.vtOptedIn ?? clt_defaults.default_vt_opted_in;
+  const vtEmployerValue = Math.max(0, Number(input.vtEmployerValue ?? 0));
   const vrDiscount = Math.max(0, Number(input.vrDiscount ?? clt_defaults.default_vr_discount));
   const otherDiscounts = Math.max(0, Number(input.otherDiscounts ?? 0));
   const minimumWage = Math.max(0, Number(input.minimumWage ?? clt_defaults.minimum_wage));
@@ -342,8 +344,14 @@ export function calculateCltPayroll(input: PayrollCalculationInput): PayrollCalc
   const inssAmount = round2(monthlyInssAmount + thirteenthInssAmount);
   const irrfAmount = round2(irrfBreakdown.irrfAmount + thirteenthIrrfAmount);
 
-  // Vale-Transporte incide apenas sobre os dias efetivamente trabalhados (não incide sobre férias/licença)
-  const vtDiscountAmount = vtOptedIn ? round2(proportionalBaseSalary * vtCapRate) : 0;
+  // Vale-Transporte incide apenas sobre os dias efetivamente trabalhados e é limitado ao menor valor
+  // entre 6% do salário proporcional e o custo efetivo custeado pelo empregador (Art. 4º parágrafo único Lei 7.418/85)
+  const rawVtCap = round2(proportionalBaseSalary * vtCapRate);
+  const vtDiscountAmount = vtOptedIn
+    ? vtEmployerValue > 0
+      ? round2(Math.min(rawVtCap, vtEmployerValue))
+      : rawVtCap
+    : 0;
 
   const totalDiscounts = round2(
     inssAmount +

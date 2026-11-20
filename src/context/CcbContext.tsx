@@ -4,6 +4,10 @@ import {
   CompanyBranch,
   Job,
   Employee,
+  EmployeeBenefitRecord,
+  EmployeeBenefitStatus,
+  EmployeeVacationRecord,
+  EmployeeVacationStatus,
   Vacancy,
   Candidate,
   DocumentRecord,
@@ -23,7 +27,10 @@ import {
 import { supabase } from '../lib/supabase';
 import { ONBOARDING_SQL_TRANSACTION } from '../utils/sqlTemplates';
 import { geocodeAddress } from '../utils/geocoding';
-import { buildDefaultCompanyPayrollParameters } from '../utils/payrollCalculator';
+import {
+  buildDefaultCompanyPayrollParameters,
+  summarizeEmployeeBenefits,
+} from '../utils/payrollCalculator';
 import {
   applyFromLandingService,
   submitContactLeadService,
@@ -34,6 +41,8 @@ import {
 import {
   dispatchPayslipsService,
   generateCompetencePayrollService,
+  resolveEmployeePayrollBaseSalary,
+  resolveEmployeeVtEmployerValue,
   savePayrollParametersService,
   syncDraftEntriesForCompetenceService,
   syncEmployeeDraftPayrollEntriesService,
@@ -41,6 +50,18 @@ import {
   upsertPayrollEntryService,
   type PayrollUpsertInput,
 } from './services/payrollService';
+import {
+  createEmployeeBenefitService,
+  createEmployeeVacationService,
+  deleteEmployeeBenefitService,
+  deleteEmployeeVacationService,
+  fetchEmployeeBenefitsService,
+  fetchEmployeeVacationsService,
+  updateEmployeeBenefitService,
+  updateEmployeeVacationService,
+  type CreateEmployeeBenefitInput,
+  type CreateEmployeeVacationInput,
+} from './services/employeeHrService';
 
 export type { PayrollUpsertInput };
 
@@ -175,6 +196,8 @@ interface CcbContextType {
   documents: DocumentRecord[];
   payrollEntries: PayrollEntry[];
   currentPayrollParameters: PayrollParameters;
+  employeeVacations: EmployeeVacationRecord[];
+  employeeBenefits: EmployeeBenefitRecord[];
   talentBank: TalentBankEntry[];
   contactLeads: ContactLead[];
 
@@ -256,6 +279,25 @@ interface CcbContextType {
     channel?: string
   ) => Promise<void>;
 
+  // Employee Vacations & Benefits (connected with Payroll)
+  addEmployeeVacation: (input: CreateEmployeeVacationInput) => Promise<EmployeeVacationRecord>;
+  updateEmployeeVacation: (
+    vacationId: string,
+    patch: Partial<
+      Omit<EmployeeVacationRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeVacationStatus }
+  ) => Promise<EmployeeVacationRecord>;
+  deleteEmployeeVacation: (vacationId: string) => Promise<void>;
+  launchVacationToPayroll: (vacationId: string) => Promise<PayrollEntry>;
+  addEmployeeBenefit: (input: CreateEmployeeBenefitInput) => Promise<EmployeeBenefitRecord>;
+  updateEmployeeBenefit: (
+    benefitId: string,
+    patch: Partial<
+      Omit<EmployeeBenefitRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeBenefitStatus }
+  ) => Promise<EmployeeBenefitRecord>;
+  deleteEmployeeBenefit: (benefitId: string, employeeId: string) => Promise<void>;
+
   // Talent Bank & Contact Leads management
   updateTalentStatus: (id: string, status: TalentBankEntry['status']) => Promise<void>;
   deleteTalentEntry: (id: string) => Promise<void>;
@@ -287,6 +329,8 @@ const EMPTY_DB: CcbDatabase = {
   documents: [],
   payrollEntries: [],
   payrollParameters: [],
+  employeeVacations: [],
+  employeeBenefits: [],
   talentBank: [],
   contactLeads: [],
 };
@@ -362,6 +406,8 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           docRes,
           payrollRes,
           payrollParamsRes,
+          empVacationsList,
+          empBenefitsList,
           talentRes,
           leadRes,
         ] = await Promise.all([
@@ -374,6 +420,8 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('documents').select('*').order('uploaded_at', { ascending: false }),
           supabase.from('payroll_entries').select('*').order('competence', { ascending: false }),
           supabase.from('payroll_parameters').select('*'),
+          fetchEmployeeVacationsService().catch(() => []),
+          fetchEmployeeBenefitsService().catch(() => []),
           supabase.from('talent_bank').select('*').order('created_at', { ascending: false }),
           supabase.from('contact_leads').select('*').order('created_at', { ascending: false }),
         ]);
@@ -403,6 +451,8 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           documents: (docRes.data || []) as DocumentRecord[],
           payrollEntries: (payrollRes.data || []) as PayrollEntry[],
           payrollParameters: (payrollParamsRes.data || []) as PayrollParameters[],
+          employeeVacations: empVacationsList,
+          employeeBenefits: empBenefitsList,
           talentBank: (talentRes.data || []) as TalentBankEntry[],
           contactLeads: (leadRes.data || []) as ContactLead[],
         });
@@ -579,6 +629,12 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const candidates = database.candidates.filter((c) => c.tenant_id === activeTenantId);
   const documents = database.documents.filter((d) => d.tenant_id === activeTenantId);
   const payrollEntries = database.payrollEntries.filter((p) => p.tenant_id === activeTenantId);
+  const employeeVacations = database.employeeVacations.filter(
+    (v) => v.tenant_id === activeTenantId
+  );
+  const employeeBenefits = database.employeeBenefits.filter(
+    (b) => b.tenant_id === activeTenantId
+  );
   const currentPayrollParameters: PayrollParameters =
     database.payrollParameters.find((p) => p.tenant_id === activeTenantId) ||
     buildDefaultCompanyPayrollParameters(activeTenantId);
@@ -871,6 +927,7 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         jobs,
         payrollEntries,
         companyParams: currentPayrollParameters,
+        employeeBenefits,
       });
     }
     await fetchDatabase(true);
@@ -1245,13 +1302,14 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     params: Omit<PayrollParameters, 'id' | 'tenant_id' | 'updated_at'>
   ): Promise<PayrollParameters> => {
     const saved = await savePayrollParametersService(activeTenantId, params);
-    await syncDraftEntriesForCompetenceService({
-      tenantId: activeTenantId,
-      employees,
-      jobs,
-      payrollEntries,
-      companyParams: saved,
-    });
+      await syncDraftEntriesForCompetenceService({
+        tenantId: activeTenantId,
+        employees,
+        jobs,
+        payrollEntries,
+        companyParams: saved,
+        employeeBenefits,
+      });
     await fetchDatabase(true);
     return saved;
   };
@@ -1260,7 +1318,20 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const emp = employees.find((e) => e.id === input.employeeId);
     const saved = await upsertPayrollEntryService(
       activeTenantId,
-      input,
+      {
+        ...input,
+        vtEmployerValue:
+          input.vtEmployerValue ??
+          (emp
+            ? resolveEmployeeVtEmployerValue(
+                emp,
+                input.baseSalary,
+                currentPayrollParameters,
+                employeeBenefits,
+                0
+              )
+            : 0),
+      },
       emp,
       currentPayrollParameters
     );
@@ -1278,6 +1349,7 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       jobs,
       payrollEntries,
       companyParams: currentPayrollParameters,
+      employeeBenefits,
     });
     if (result.generated > 0) {
       await fetchDatabase(true);
@@ -1293,6 +1365,7 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       jobs,
       payrollEntries,
       companyParams: currentPayrollParameters,
+      employeeBenefits,
     });
     if (synced > 0) {
       await fetchDatabase(true);
@@ -1339,6 +1412,217 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status,
       channel
     );
+    await fetchDatabase(true);
+  };
+
+  // ==================== EMPLOYEE VACATIONS & BENEFITS ====================
+  const syncBenefitsToEmployeeAndPayroll = async (
+    employeeId: string,
+    nextTenantBenefits: EmployeeBenefitRecord[]
+  ) => {
+    const emp = employees.find((e) => e.id === employeeId);
+    if (!emp || emp.contract_type === 'pj') return;
+
+    const baseSalary = resolveEmployeePayrollBaseSalary(emp, jobs);
+    const empBenefits = nextTenantBenefits.filter((b) => b.employee_id === employeeId);
+    const summary = summarizeEmployeeBenefits(empBenefits, baseSalary, currentPayrollParameters);
+
+    const { data: updatedEmp, error: empErr } = await supabase
+      .from('employees')
+      .update({
+        vt_opted_in: summary.vtOptedIn,
+        vr_discount: summary.vrVaDiscount,
+        health_plan_discount: summary.healthAndOtherDiscounts,
+      })
+      .eq('id', employeeId)
+      .eq('tenant_id', activeTenantId)
+      .select('*')
+      .single();
+
+    if (empErr) throw new Error(empErr.message);
+    if (updatedEmp) {
+      await syncEmployeeDraftPayrollEntriesService({
+        tenantId: activeTenantId,
+        employee: updatedEmp as Employee,
+        jobs,
+        payrollEntries,
+        companyParams: currentPayrollParameters,
+        employeeBenefits: nextTenantBenefits,
+      });
+    }
+  };
+
+  const addEmployeeVacation = async (
+    input: CreateEmployeeVacationInput
+  ): Promise<EmployeeVacationRecord> => {
+    const created = await createEmployeeVacationService(activeTenantId, input);
+    await fetchDatabase(true);
+    return created;
+  };
+
+  const updateEmployeeVacation = async (
+    vacationId: string,
+    patch: Partial<
+      Omit<EmployeeVacationRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeVacationStatus }
+  ): Promise<EmployeeVacationRecord> => {
+    const updated = await updateEmployeeVacationService(activeTenantId, vacationId, patch);
+    await fetchDatabase(true);
+    return updated;
+  };
+
+  const deleteEmployeeVacation = async (vacationId: string): Promise<void> => {
+    await deleteEmployeeVacationService(activeTenantId, vacationId);
+    await fetchDatabase(true);
+  };
+
+  const launchVacationToPayroll = async (vacationId: string): Promise<PayrollEntry> => {
+    const vacation = employeeVacations.find((v) => v.id === vacationId);
+    if (!vacation) {
+      throw new Error('Registro de férias não encontrado.');
+    }
+
+    const emp = employees.find((e) => e.id === vacation.employee_id);
+    if (!emp) {
+      throw new Error('Colaborador vinculado às férias não encontrado.');
+    }
+    if (emp.contract_type === 'pj') {
+      throw new Error('Apenas colaboradores em regime CLT podem receber férias na folha.');
+    }
+
+    const competence = vacation.competence || vacation.start_date.slice(0, 7);
+    const existingEntry = payrollEntries.find(
+      (p) => p.employee_id === emp.id && p.competence === competence
+    );
+    const baseSalary = existingEntry
+      ? Number(existingEntry.base_salary)
+      : resolveEmployeePayrollBaseSalary(emp, jobs);
+
+    const monthDays = 30;
+    const leaveDays = existingEntry ? Number(existingEntry.leave_days || 0) : 0;
+    const workedDays = Math.max(0, monthDays - Number(vacation.days_taken || 0) - leaveDays);
+    const vtEmployerValue = resolveEmployeeVtEmployerValue(
+      emp,
+      baseSalary,
+      currentPayrollParameters,
+      employeeBenefits,
+      Number(existingEntry?.vt_employer_value ?? 0)
+    );
+
+    const periodTag =
+      Number(vacation.doubled_days || 0) > 0
+        ? `${vacation.acquisitive_period_label} (Vencida · Dobra Art. 137 CLT)`
+        : `${vacation.acquisitive_period_label} (No Prazo Concessivo · Art. 134 CLT)`;
+
+    const savedEntry = await upsertPayrollEntryService(
+      activeTenantId,
+      {
+        employeeId: emp.id,
+        competence,
+        contractType: 'clt',
+        baseSalary,
+        workedDays,
+        dependentsCount: existingEntry
+          ? Number(existingEntry.dependents_count)
+          : emp.dependents_count ?? 0,
+        overtime50Hours: existingEntry ? Number(existingEntry.overtime_50_hours || 0) : 0,
+        overtime100Hours: existingEntry ? Number(existingEntry.overtime_100_hours || 0) : 0,
+        nightHours: existingEntry ? Number(existingEntry.night_hours || 0) : 0,
+        insalubrityRate: existingEntry ? Number(existingEntry.insalubrity_rate || 0) : 0,
+        hazardPay: existingEntry ? Boolean(existingEntry.hazard_pay) : false,
+        bonuses: existingEntry ? Number(existingEntry.bonuses || 0) : 0,
+        absenceDays: existingEntry
+          ? Number(existingEntry.absence_days || 0)
+          : Number(vacation.unjustified_absences || 0),
+        vtOptedIn: existingEntry
+          ? Boolean(existingEntry.vt_opted_in)
+          : emp.vt_opted_in ?? currentPayrollParameters.default_vt_opted_in,
+        vtEmployerValue,
+        vrDiscount: existingEntry
+          ? Number(existingEntry.vr_discount)
+          : Number(emp.vr_discount ?? currentPayrollParameters.default_vr_discount ?? 0),
+        otherDiscounts: existingEntry
+          ? Number(existingEntry.other_discounts)
+          : Number(emp.health_plan_discount ?? 0),
+        vacationDays: Number(vacation.days_taken || 0),
+        vacationSoldDays: Number(vacation.sold_days || 0),
+        vacationDoubledDays: Number(vacation.doubled_days || 0),
+        vacationPeriodLabel: periodTag,
+        leaveType: existingEntry?.leave_type || 'none',
+        leaveDays,
+        thirteenthMode: vacation.advance_13th_requested
+          ? 'first_installment'
+          : existingEntry?.thirteenth_mode || 'none',
+        status: existingEntry?.status || 'draft',
+        notes:
+          existingEntry?.notes ||
+          `Férias programadas (${vacation.start_date.split('-').reverse().join('/')} a ${vacation.end_date.split('-').reverse().join('/')})`,
+      },
+      emp,
+      currentPayrollParameters
+    );
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const nextVacStatus: EmployeeVacationStatus =
+      vacation.end_date < todayIso
+        ? 'completed'
+        : vacation.start_date <= todayIso
+        ? 'in_progress'
+        : 'scheduled';
+
+    await updateEmployeeVacationService(activeTenantId, vacation.id, {
+      competence,
+      payroll_entry_id: savedEntry.id,
+      status: nextVacStatus,
+      approved_by: vacation.approved_by || authUser?.id || null,
+      approved_at: vacation.approved_at || new Date().toISOString(),
+    });
+
+    if (nextVacStatus === 'in_progress' && emp.status !== 'vacation') {
+      await supabase
+        .from('employees')
+        .update({ status: 'vacation' })
+        .eq('id', emp.id)
+        .eq('tenant_id', activeTenantId);
+    }
+
+    await fetchDatabase(true);
+    return savedEntry;
+  };
+
+  const addEmployeeBenefit = async (
+    input: CreateEmployeeBenefitInput
+  ): Promise<EmployeeBenefitRecord> => {
+    const created = await createEmployeeBenefitService(activeTenantId, input);
+    const nextTenantBenefits = [created, ...employeeBenefits];
+    await syncBenefitsToEmployeeAndPayroll(input.employee_id, nextTenantBenefits);
+    await fetchDatabase(true);
+    return created;
+  };
+
+  const updateEmployeeBenefit = async (
+    benefitId: string,
+    patch: Partial<
+      Omit<EmployeeBenefitRecord, 'id' | 'tenant_id' | 'employee_id' | 'created_at'>
+    > & { status?: EmployeeBenefitStatus }
+  ): Promise<EmployeeBenefitRecord> => {
+    const existing = employeeBenefits.find((b) => b.id === benefitId);
+    const updated = await updateEmployeeBenefitService(activeTenantId, benefitId, patch);
+    const targetEmpId = updated.employee_id || existing?.employee_id;
+    if (targetEmpId) {
+      const nextTenantBenefits = employeeBenefits.map((b) =>
+        b.id === benefitId ? updated : b
+      );
+      await syncBenefitsToEmployeeAndPayroll(targetEmpId, nextTenantBenefits);
+    }
+    await fetchDatabase(true);
+    return updated;
+  };
+
+  const deleteEmployeeBenefit = async (benefitId: string, employeeId: string): Promise<void> => {
+    await deleteEmployeeBenefitService(activeTenantId, benefitId);
+    const nextTenantBenefits = employeeBenefits.filter((b) => b.id !== benefitId);
+    await syncBenefitsToEmployeeAndPayroll(employeeId, nextTenantBenefits);
     await fetchDatabase(true);
   };
 
@@ -1401,6 +1685,8 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         documents,
         payrollEntries,
         currentPayrollParameters,
+        employeeVacations,
+        employeeBenefits,
         talentBank: database.talentBank,
         contactLeads: database.contactLeads,
         addNewJob,
@@ -1432,6 +1718,13 @@ export const CcbProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deletePayrollEntry,
         dispatchPayslips,
         updatePayslipDispatchStatus,
+        addEmployeeVacation,
+        updateEmployeeVacation,
+        deleteEmployeeVacation,
+        launchVacationToPayroll,
+        addEmployeeBenefit,
+        updateEmployeeBenefit,
+        deleteEmployeeBenefit,
         updateTalentStatus,
         deleteTalentEntry,
         updateContactLeadStatus,

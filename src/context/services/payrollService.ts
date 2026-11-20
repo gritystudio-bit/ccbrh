@@ -1,5 +1,6 @@
 import type {
   Employee,
+  EmployeeBenefitRecord,
   EmployeeContractType,
   Job,
   NfseStatus,
@@ -15,6 +16,7 @@ import {
   buildDefaultCompanyPayrollParameters,
   calculatePayrollByContractType,
   calculateWorkedDaysForCompetence,
+  summarizeEmployeeBenefits,
 } from '../../utils/payrollCalculator';
 
 export interface PayrollUpsertInput {
@@ -32,6 +34,7 @@ export interface PayrollUpsertInput {
   bonuses: number;
   absenceDays: number;
   vtOptedIn: boolean;
+  vtEmployerValue?: number;
   vrDiscount: number;
   otherDiscounts: number;
   vacationDays?: number;
@@ -55,12 +58,29 @@ export function resolveEmployeePayrollBaseSalary(emp: Employee, jobs: Job[]): nu
     : Number(emp.salary_override ?? job?.base_salary ?? 0);
 }
 
+export function resolveEmployeeVtEmployerValue(
+  emp: Employee,
+  baseSalary: number,
+  companyParams: PayrollParameters,
+  employeeBenefits?: EmployeeBenefitRecord[],
+  fallbackValue = 0
+): number {
+  if (emp.contract_type === 'pj') return 0;
+  const activeForEmp = (employeeBenefits || []).filter(
+    (b) => b.employee_id === emp.id && b.status === 'active'
+  );
+  if (activeForEmp.length === 0) return fallbackValue;
+  const summary = summarizeEmployeeBenefits(activeForEmp, baseSalary, companyParams);
+  return summary.vtEmployerValue > 0 ? summary.vtEmployerValue : fallbackValue;
+}
+
 async function recalculateDraftEntryForEmployee(
   tenantId: string,
   entry: PayrollEntry,
   emp: Employee,
   jobs: Job[],
-  companyParams: PayrollParameters
+  companyParams: PayrollParameters,
+  employeeBenefits?: EmployeeBenefitRecord[]
 ): Promise<PayrollEntry> {
   const contractType: EmployeeContractType = emp.contract_type || 'clt';
   const isPj = contractType === 'pj';
@@ -71,6 +91,13 @@ async function recalculateDraftEntryForEmployee(
     emp.resignation_date
   );
   const workedDays = eligibility.eligible ? eligibility.workedDays : 0;
+  const vtEmployerValue = resolveEmployeeVtEmployerValue(
+    emp,
+    baseSalary,
+    companyParams,
+    employeeBenefits,
+    Number(entry.vt_employer_value ?? 0)
+  );
 
   return upsertPayrollEntryService(
     tenantId,
@@ -89,6 +116,7 @@ async function recalculateDraftEntryForEmployee(
       bonuses: Number(entry.bonuses || 0),
       absenceDays: isPj ? 0 : Number(entry.absence_days || 0),
       vtOptedIn: isPj ? false : emp.vt_opted_in ?? entry.vt_opted_in ?? companyParams.default_vt_opted_in,
+      vtEmployerValue,
       vrDiscount: isPj ? 0 : Number(emp.vr_discount ?? entry.vr_discount ?? 0),
       otherDiscounts: isPj ? 0 : Number(emp.health_plan_discount ?? entry.other_discounts ?? 0),
       vacationDays: isPj ? 0 : Number(entry.vacation_days || 0),
@@ -121,8 +149,9 @@ export async function syncEmployeeDraftPayrollEntriesService(params: {
   jobs: Job[];
   payrollEntries: PayrollEntry[];
   companyParams: PayrollParameters;
+  employeeBenefits?: EmployeeBenefitRecord[];
 }): Promise<number> {
-  const { tenantId, employee, jobs, payrollEntries, companyParams } = params;
+  const { tenantId, employee, jobs, payrollEntries, companyParams, employeeBenefits } = params;
   const draftEntries = payrollEntries.filter(
     (p) => p.employee_id === employee.id && p.status === 'draft'
   );
@@ -130,7 +159,14 @@ export async function syncEmployeeDraftPayrollEntriesService(params: {
 
   let synced = 0;
   for (const entry of draftEntries) {
-    await recalculateDraftEntryForEmployee(tenantId, entry, employee, jobs, companyParams);
+    await recalculateDraftEntryForEmployee(
+      tenantId,
+      entry,
+      employee,
+      jobs,
+      companyParams,
+      employeeBenefits
+    );
     synced += 1;
   }
   return synced;
@@ -143,8 +179,10 @@ export async function syncDraftEntriesForCompetenceService(params: {
   jobs: Job[];
   payrollEntries: PayrollEntry[];
   companyParams: PayrollParameters;
+  employeeBenefits?: EmployeeBenefitRecord[];
 }): Promise<number> {
-  const { tenantId, competence, employees, jobs, payrollEntries, companyParams } = params;
+  const { tenantId, competence, employees, jobs, payrollEntries, companyParams, employeeBenefits } =
+    params;
   const draftEntries = payrollEntries.filter(
     (p) => p.status === 'draft' && (!competence || p.competence === competence)
   );
@@ -154,7 +192,14 @@ export async function syncDraftEntriesForCompetenceService(params: {
   for (const entry of draftEntries) {
     const emp = employees.find((e) => e.id === entry.employee_id);
     if (!emp) continue;
-    await recalculateDraftEntryForEmployee(tenantId, entry, emp, jobs, companyParams);
+    await recalculateDraftEntryForEmployee(
+      tenantId,
+      entry,
+      emp,
+      jobs,
+      companyParams,
+      employeeBenefits
+    );
     synced += 1;
   }
   return synced;
@@ -204,6 +249,7 @@ export async function upsertPayrollEntryService(
     bonuses: input.bonuses,
     absenceDays: input.absenceDays,
     vtOptedIn: input.vtOptedIn,
+    vtEmployerValue: isPj ? 0 : input.vtEmployerValue ?? 0,
     vrDiscount: input.vrDiscount,
     otherDiscounts: input.otherDiscounts,
     vacationDays: isPj ? 0 : input.vacationDays ?? 0,
@@ -243,6 +289,7 @@ export async function upsertPayrollEntryService(
     bonuses: input.bonuses,
     absence_days: isPj ? 0 : input.absenceDays,
     vt_opted_in: isPj ? false : input.vtOptedIn,
+    vt_employer_value: isPj ? 0 : Number(input.vtEmployerValue ?? 0),
     vr_discount: isPj ? 0 : input.vrDiscount,
     other_discounts: input.otherDiscounts,
     vacation_days: isPj ? 0 : input.vacationDays ?? 0,
@@ -305,8 +352,9 @@ export async function generateCompetencePayrollService(params: {
   jobs: Job[];
   payrollEntries: PayrollEntry[];
   companyParams?: PayrollParameters;
+  employeeBenefits?: EmployeeBenefitRecord[];
 }): Promise<{ generated: number; skippedByDates: number }> {
-  const { tenantId, competence, employees, jobs, payrollEntries } = params;
+  const { tenantId, competence, employees, jobs, payrollEntries, employeeBenefits } = params;
   const resolvedParams = params.companyParams || buildDefaultCompanyPayrollParameters(tenantId);
 
   const activeCandidates = employees.filter(
@@ -339,6 +387,13 @@ export async function generateCompetencePayrollService(params: {
 
       const dependentsCount = isPj ? 0 : emp.dependents_count ?? 0;
       const vtOptedIn = isPj ? false : emp.vt_opted_in ?? resolvedParams.default_vt_opted_in;
+      const vtEmployerValue = resolveEmployeeVtEmployerValue(
+        emp,
+        baseSalary,
+        resolvedParams,
+        employeeBenefits,
+        0
+      );
       const vrDiscount = isPj
         ? 0
         : Number(emp.vr_discount ?? resolvedParams.default_vr_discount ?? 0);
@@ -356,6 +411,7 @@ export async function generateCompetencePayrollService(params: {
         bonuses: 0,
         absenceDays: 0,
         vtOptedIn,
+        vtEmployerValue,
         vrDiscount,
         otherDiscounts,
         minimumWage: resolvedParams.minimum_wage,
@@ -386,6 +442,7 @@ export async function generateCompetencePayrollService(params: {
           bonuses: 0,
           absence_days: 0,
           vt_opted_in: vtOptedIn,
+          vt_employer_value: vtEmployerValue,
           vr_discount: vrDiscount,
           other_discounts: otherDiscounts,
           overtime_amount: calc.overtimeAmount,

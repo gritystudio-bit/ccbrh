@@ -3,11 +3,10 @@ import { useCcb } from '../context/CcbContext';
 import {
   EmployeeContractType,
   PayrollEntry,
-  PayrollStatus,
 } from '../types/database';
 import { exportPayrollToExcel } from '../utils/payrollExport';
-import { analyzeEmployeeVacationCycles } from '../utils/payrollCalculator';
 import { PayrollSummaryKpis } from './payroll/PayrollSummaryKpis';
+import { PayrollCompetenceTable } from './payroll/PayrollCompetenceTable';
 import { PayrollSettingsModal } from './payroll/PayrollSettingsModal';
 import { PayrollEntryModal } from './payroll/PayrollEntryModal';
 import { PayslipPreviewModal } from './payroll/PayslipPreviewModal';
@@ -16,14 +15,12 @@ import {
   Calendar,
   CheckCircle2,
   Download,
-  Edit3,
   FileText,
   Loader2,
   Plus,
   RefreshCw,
   Settings2,
   ShieldCheck,
-  Trash2,
   X,
 } from 'lucide-react';
 
@@ -35,25 +32,6 @@ const getCurrentCompetence = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const formatDateBR = (iso?: string | null) => {
-  if (!iso) return '-';
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-};
-
-const STATUS_BADGE: Record<PayrollStatus, { label: string; className: string }> = {
-  draft: { label: 'Rascunho', className: 'bg-amber-50 text-amber-800 border-amber-200' },
-  closed: { label: 'Fechada', className: 'bg-[#E0F4F7] text-[#03416A] border-[#c8e8ed]' },
-  paid: { label: 'Paga', className: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-};
-
-const NFSE_STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  awaiting_issue: { label: 'Aguardando NFS-e', className: 'bg-amber-50 text-amber-800 border-amber-200' },
-  issued: { label: 'NFS-e Emitida', className: 'bg-purple-50 text-purple-800 border-purple-200' },
-  approved: { label: 'Conferida', className: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  not_applicable: { label: 'Dispensada', className: 'bg-slate-100 text-slate-600 border-slate-200' },
-};
-
 export const PayrollModule: React.FC = () => {
   const {
     currentTenantId,
@@ -61,6 +39,8 @@ export const PayrollModule: React.FC = () => {
     employees,
     jobs,
     payrollEntries,
+    employeeVacations,
+    employeeBenefits,
     currentPayrollParameters,
     savePayrollParameters,
     generateCompetencePayroll,
@@ -68,6 +48,8 @@ export const PayrollModule: React.FC = () => {
     upsertPayrollEntry,
     updatePayrollStatus,
     deletePayrollEntry,
+    updateEmployeeVacation,
+    launchVacationToPayroll,
   } = useCcb();
 
   const [competence, setCompetence] = useState<string>(getCurrentCompetence());
@@ -333,229 +315,37 @@ export const PayrollModule: React.FC = () => {
 
       <PayrollSummaryKpis entries={entriesForCompetence} />
 
-      {/* Tabela Analítica */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#082175]">
-            Lançamentos da Competência ({competence})
-          </h2>
-          <span className="text-xs text-slate-500">
-            {entriesForCompetence.length} registro(s) encontrado(s)
-          </span>
-        </div>
-
-        {entriesForCompetence.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
-            <FileText className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="text-sm font-semibold text-slate-700">
-              Nenhum lançamento encontrado para {competence}
-            </p>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Clique em <strong>Gerar Competência</strong> para calcular CLT (PF) e PJ (NFS-e) em
-              lote respeitando as datas de início e desligamento.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                <tr>
-                  <th className="py-3 px-4 text-left font-semibold">Colaborador / Prestador</th>
-                  <th className="py-3 px-3 text-center font-semibold">Regime</th>
-                  <th className="py-3 px-3 text-center font-semibold">Dias</th>
-                  <th className="py-3 px-3 text-right font-semibold">Bruto / Valor NFS-e</th>
-                  <th className="py-3 px-3 text-right font-semibold">INSS+IRRF / NFS-e</th>
-                  <th className="py-3 px-3 text-right font-semibold">Líquido a Pagar</th>
-                  <th className="py-3 px-3 text-center font-semibold">Situação</th>
-                  <th className="py-3 px-3 text-center font-semibold">Perfil do Colaborador</th>
-                  <th className="py-3 px-4 text-right font-semibold">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {entriesForCompetence.map((entry) => {
-                  const emp = employees.find((e) => e.id === entry.employee_id);
-                  const job = jobs.find((j) => j.id === emp?.job_id);
-                  const isPj = (entry.contract_type || emp?.contract_type || 'clt') === 'pj';
-                  const currentEmpRegime = emp?.contract_type || 'clt';
-                  const hasRegimeMismatch = Boolean(emp && entry.contract_type && currentEmpRegime !== entry.contract_type);
-                  const nfseBadge =
-                    NFSE_STATUS_BADGE[entry.nfse_status || 'awaiting_issue'] ||
-                    NFSE_STATUS_BADGE.awaiting_issue;
-                  const vacCycleSummary = !isPj
-                    ? analyzeEmployeeVacationCycles({
-                        employee: emp,
-                        competence,
-                        existingEntries: payrollEntries,
-                        excludeCompetence: competence,
-                      })
-                    : null;
-
-                  return (
-                    <tr key={entry.id} className="hover:bg-slate-50/70">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-bold text-[#082175]">
-                            {emp?.full_name || 'Registro'}
-                          </p>
-                          {Number(entry.vacation_days || 0) > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold">
-                              Férias ({entry.vacation_days}d
-                              {Number(entry.vacation_doubled_days || 0) > 0 ? ' · Dobra Art. 137' : ''}
-                              )
-                            </span>
-                          )}
-                          {Number(entry.vacation_days || 0) === 0 &&
-                            vacCycleSummary &&
-                            vacCycleSummary.totalOpenPeriodsCount > 0 && (
-                              <span
-                                title={vacCycleSummary.openCycles
-                                  .map(
-                                    (c) =>
-                                      `Ciclo ${c.label}: ${
-                                        c.status === 'expired_double'
-                                          ? 'Vencida (Dobra Art. 137 CLT)'
-                                          : 'No prazo concessivo (Art. 134 CLT)'
-                                      }`
-                                  )
-                                  .join(' | ')}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                  vacCycleSummary.expiredCycles.length > 0
-                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
-                                }`}
-                              >
-                                {vacCycleSummary.totalOpenPeriodsCount} Férias a tirar
-                                {vacCycleSummary.expiredCycles.length > 0
-                                  ? ` (${vacCycleSummary.expiredCycles.length} Vencida Art. 137)`
-                                  : ''}
-                              </span>
-                            )}
-                          {entry.leave_type && entry.leave_type !== 'none' && Number(entry.leave_days || 0) > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#082175] text-[10px] font-semibold">
-                              Licença ({entry.leave_days}d)
-                            </span>
-                          )}
-                          {entry.thirteenth_mode && entry.thirteenth_mode !== 'none' && (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
-                              13º Salário
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          {isPj ? emp?.pj_company_name || 'Prestador PJ' : job?.title || '-'} ·
-                          Início {formatDateBR(emp?.hire_date)}
-                          {entry.vacation_period_label ? ` · Ref. ${entry.vacation_period_label}` : ''}
-                        </p>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <div className="inline-flex flex-col items-center gap-0.5">
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded border text-[10px] font-bold ${
-                              isPj
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : 'bg-[#E0F4F7] text-[#03416A] border-[#c8e8ed]'
-                            }`}
-                          >
-                            {isPj ? 'PJ' : 'CLT'}
-                          </span>
-                          {hasRegimeMismatch && (
-                            <span
-                              title={`Cadastro atualizado para ${currentEmpRegime.toUpperCase()}. Reabra para Rascunho e clique em Recalcular Rascunhos para atualizar.`}
-                              className="text-[9px] font-semibold text-amber-700"
-                            >
-                              Cadastro: {currentEmpRegime.toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono">{entry.worked_days}d</td>
-                      <td className="py-3 px-3 text-right font-mono font-semibold text-slate-800">
-                        {formatBRL(Number(entry.gross_salary))}
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        {isPj ? (
-                          <div className="inline-flex flex-col items-end gap-0.5">
-                            <span
-                              className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${nfseBadge.className}`}
-                            >
-                              {nfseBadge.label}
-                            </span>
-                            {entry.nfse_number && (
-                              <span className="text-[10px] font-mono text-slate-500">
-                                Nº {entry.nfse_number}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="font-mono text-red-700 text-[11px]">
-                            <div>INSS -{formatBRL(Number(entry.inss_amount))}</div>
-                            <div>IRRF -{formatBRL(Number(entry.irrf_amount))}</div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700">
-                        {formatBRL(Number(entry.net_salary))}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <select
-                          aria-label="Situação da folha"
-                          value={entry.status}
-                          onChange={(e) =>
-                            updatePayrollStatus(entry.id, e.target.value as PayrollStatus)
-                          }
-                          className={`text-[11px] font-semibold rounded-md border px-2 py-1 outline-none cursor-pointer ${
-                            STATUS_BADGE[entry.status].className
-                          }`}
-                        >
-                          <option value="draft">Rascunho</option>
-                          <option value="closed">Fechada</option>
-                          <option value="paid">Paga</option>
-                        </select>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setPayslipEntry(entry)}
-                          title="Recibo disponível no perfil individual do colaborador (clique para visualizar)"
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md border px-2 py-0.5 bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>Vinculado ao Perfil</span>
-                        </button>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => setPayslipEntry(entry)}
-                            title={isPj ? 'Autorização NFS-e' : 'Demonstrativo CLT'}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#082175] hover:bg-slate-50"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setEditingEmployeeId(entry.employee_id)}
-                            title="Editar cálculo"
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#082175] hover:bg-slate-50"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteEntry(entry)}
-                            title="Excluir lançamento"
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <PayrollCompetenceTable
+        competence={competence}
+        entries={entriesForCompetence}
+        allPayrollEntries={payrollEntries}
+        employees={employees}
+        jobs={jobs}
+        employeeVacations={employeeVacations}
+        employeeBenefits={employeeBenefits}
+        payrollParameters={currentPayrollParameters}
+        onUpdateStatus={updatePayrollStatus}
+        onPreviewPayslip={(entry) => setPayslipEntry(entry)}
+        onEditEntry={(empId) => setEditingEmployeeId(empId)}
+        onDeleteEntry={handleDeleteEntry}
+        onApproveVacation={async (vacationId) => {
+          await updateEmployeeVacation(vacationId, {
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+          });
+          setFeedback({
+            type: 'success',
+            text: 'Solicitação de férias aprovada pelo Gestor / RH. Pronta para integração à Folha.',
+          });
+        }}
+        onLaunchVacationToPayroll={async (vacationId) => {
+          await launchVacationToPayroll(vacationId);
+          setFeedback({
+            type: 'success',
+            text: `Férias integradas automaticamente à Folha de Pagamento da competência ${competence}.`,
+          });
+        }}
+      />
 
       <PayrollSettingsModal
         isOpen={showSettingsModal}

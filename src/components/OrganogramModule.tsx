@@ -23,6 +23,9 @@ export const OrganogramModule: React.FC = () => {
     branches,
     documents,
     payrollEntries,
+    employeeVacations,
+    employeeBenefits,
+    currentPayrollParameters,
     currentCompany,
     currentTenantId,
     addNewEmployee,
@@ -33,6 +36,13 @@ export const OrganogramModule: React.FC = () => {
     updateDocumentStatus,
     deleteDocument,
     getDocumentSignedUrl,
+    addEmployeeVacation,
+    updateEmployeeVacation,
+    deleteEmployeeVacation,
+    launchVacationToPayroll,
+    addEmployeeBenefit,
+    updateEmployeeBenefit,
+    deleteEmployeeBenefit,
   } = useCcb();
 
   const [viewMode, setViewMode] = useState<'tree' | 'directory'>('directory');
@@ -303,6 +313,9 @@ export const OrganogramModule: React.FC = () => {
           manager={employees.find((m) => m.id === selectedEmployee.reports_to)}
           documents={documents.filter((d) => d.employee_id === selectedEmployee.id)}
           payrollEntries={payrollEntries.filter((p) => p.employee_id === selectedEmployee.id)}
+          vacations={employeeVacations.filter((v) => v.employee_id === selectedEmployee.id)}
+          benefits={employeeBenefits.filter((b) => b.employee_id === selectedEmployee.id)}
+          payrollParameters={currentPayrollParameters}
           company={currentCompany}
           onBack={() => setSelectedEmployeeId(null)}
           onEditContractModal={(emp) => openEditEmployee(emp)}
@@ -316,6 +329,13 @@ export const OrganogramModule: React.FC = () => {
           onUpdateDocumentStatus={(docId, status) => updateDocumentStatus(docId, status)}
           onDeleteDocument={(docId, storagePath) => deleteDocument(docId, storagePath)}
           onOpenDocument={(storagePath) => handleOpenDocument(storagePath)}
+          onCreateVacation={addEmployeeVacation}
+          onUpdateVacation={updateEmployeeVacation}
+          onDeleteVacation={deleteEmployeeVacation}
+          onLaunchVacationToPayroll={launchVacationToPayroll}
+          onCreateBenefit={addEmployeeBenefit}
+          onUpdateBenefit={updateEmployeeBenefit}
+          onDeleteBenefit={deleteEmployeeBenefit}
         />
       ) : (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">

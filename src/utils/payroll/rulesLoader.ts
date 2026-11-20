@@ -57,7 +57,21 @@ export interface VacationRules {
   max_split_periods: number;
   min_first_split_days: number;
   min_other_split_days: number;
+  notice_min_days: number;
+  payment_before_start_days: number;
+  abono_request_before_acquisitive_end_days: number;
+  forbid_start_days_before_holiday_or_dsr: number;
+  collective_min_days: number;
+  pro_rata_min_days_for_month: number;
   absence_reduction_scale: VacationAbsenceScaleRule[];
+}
+
+export interface BenefitRules {
+  legal_reference: string;
+  vt_cap_by_actual_cost: boolean;
+  pat_employee_discount_cap_rate: number;
+  childcare_max_age_months: number;
+  allow_cash_meal_allowance: boolean;
 }
 
 export interface LeaveRules {
@@ -95,6 +109,7 @@ export interface PayrollRulesConfig {
   };
   clt_defaults: CltDefaultRules;
   vacation_rules: VacationRules;
+  benefit_rules: BenefitRules;
   leave_rules: LeaveRules;
   thirteenth_salary_rules: ThirteenthSalaryRules;
   inss_brackets: InssBracketRule[];
